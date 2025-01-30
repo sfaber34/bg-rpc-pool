@@ -25,12 +25,12 @@ console.log(`WebSocket server listening on port ${poolPort}...`);
 wss.on('connection', (ws) => {
   console.log('WebSocket client connected');
 
-  const clientID = uuidv4();
-  console.log(`Client ID: ${clientID}`);
+  const wsID = uuidv4();
+  console.log(`Client ID: ${wsID}`);
 
-  const client = {ws, clientID};
-  // poolMap.add(client);
-  ws.send(JSON.stringify({id: clientID}));
+  const client = {ws, wsID};
+  poolMap.set(wsID, client);
+  ws.send(JSON.stringify({id: wsID}));
 
   ws.isAlive = true;
   ws.on('pong', () => {
@@ -47,8 +47,10 @@ wss.on('connection', (ws) => {
       const parsedMessage = JSON.parse(message);
 
       if (parsedMessage.type === 'checkin') {
-        // handleWebSocketCheckin(ws, JSON.stringify(parsedMessage.params));
-        console.log(JSON.stringify(parsedMessage.params));
+        // Update the client info in poolMap with the checkin params
+        const existingClient = poolMap.get(wsID);
+        poolMap.set(wsID, { ...existingClient, ...parsedMessage.params });
+        console.log(`Updated client ${wsID} in pool:`, parsedMessage.params);
       } else {
         console.log('Received message with unknown type:', parsedMessage);
       }
@@ -59,7 +61,7 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     console.log('WebSocket client disconnected');
-    // poolMap.delete(client);
+    poolMap.delete(wsID);
   });
 });
 
