@@ -8,8 +8,8 @@ const { poolPort, wsHeartbeatInterval } = require('./config');
 
 // SSL configuration
 const server = https.createServer({
-  key: fs.readFileSync('server.key'),
-  cert: fs.readFileSync('server.cert')
+  key: fs.readFileSync('/home/ubuntu/shared/server.key'),
+  cert: fs.readFileSync('/home/ubuntu/shared/server.cert')
 });
 
 const wss = new WebSocket.Server({ server });
