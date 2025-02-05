@@ -4,7 +4,6 @@ const https = require('https');
 const fs = require('fs');
 
 const { poolPort, wsHeartbeatInterval } = require('./config');
-// const { handleWebSocketCheckin } = require('./handleWebSocketCheckin');
 
 // SSL configuration
 const server = https.createServer({
