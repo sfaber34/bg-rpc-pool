@@ -4,7 +4,7 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 
-const { portPoolPublic, portProxyToPool, wsHeartbeatInterval } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval } = require('./config');
 
 // SSL configuration for WebSocket server
 const wsServer = https.createServer({
@@ -69,8 +69,8 @@ wsServer.listen(portPoolPublic, () => {
   console.log(`WebSocket (portPoolPublic) server listening on port ${portPoolPublic}...`);
 });
 
-httpServer.listen(portProxyToPool, () => {
-  console.log(`HTTP server (portProxyToPool) listening on port ${portProxyToPool}...`);
+httpServer.listen(poolPort, () => {
+  console.log(`HTTP server (poolPort) listening on port ${poolPort}...`);
 });
 
 const poolMap = new Map();
