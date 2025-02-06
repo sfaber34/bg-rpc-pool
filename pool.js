@@ -1,25 +1,82 @@
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
+const http = require('http');
 const fs = require('fs');
 
-const { poolPort, wsHeartbeatInterval } = require('./config');
+const { poolPortEx, poolPortIn, wsHeartbeatInterval } = require('./config');
 
-// SSL configuration
-const server = https.createServer({
+// SSL configuration for WebSocket server
+const wsServer = https.createServer({
   key: fs.readFileSync('/home/ubuntu/shared/server.key'),
   cert: fs.readFileSync('/home/ubuntu/shared/server.cert')
 });
 
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server: wsServer });
 
-server.listen(poolPort);
+// Create HTTP server for the API endpoint (no SSL)
+const httpServer = http.createServer((req, res) => {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  
+  if (req.url === '/poolMap' && req.method === 'GET') {
+    res.setHeader('Content-Type', 'application/json');
+    // Convert Map to array of objects for JSON serialization
+    const poolData = Array.from(poolMap.entries()).map(([id, client]) => ({
+      id,
+      ...client,
+      ws: undefined // Remove ws instance from response
+    }));
+    res.end(JSON.stringify(poolData));
+  } else if (req.url === '/wsIdAtHighestBlock' && req.method === 'GET') {
+    res.setHeader('Content-Type', 'application/json');
+    
+    // Get all entries with block numbers
+    const entriesWithBlocks = Array.from(poolMap.entries())
+      .map(([id, client]) => ({
+        wsID: id,
+        blockNumber: client.block_number ? parseInt(client.block_number) : -1
+      }))
+      .filter(entry => entry.blockNumber >= 0);
+
+    if (entriesWithBlocks.length === 0) {
+      res.end(JSON.stringify({ wsIDs: [], highestBlock: null }));
+      return;
+    }
+
+    // Find the highest block
+    const highestBlock = Math.max(...entriesWithBlocks.map(e => e.blockNumber));
+    
+    // Get all wsIDs at the highest block
+    const wsIDsAtHighestBlock = entriesWithBlocks
+      .filter(entry => entry.blockNumber === highestBlock)
+      .map(entry => entry.wsID);
+
+    res.end(JSON.stringify({
+      wsIDs: wsIDsAtHighestBlock,
+      highestBlock: highestBlock
+    }));
+  } else {
+    res.statusCode = 404;
+    res.end('Not Found');
+  }
+});
+
+// Start both servers
+wsServer.listen(poolPortEx, () => {
+  console.log(`WebSocket server listening on port ${poolPortEx}...`);
+});
+
+httpServer.listen(poolPortIn, () => {
+  console.log(`HTTP server listening on port ${poolPortIn}...`);
+});
 
 const poolMap = new Map();
 
 console.log("----------------------------------------------------------------------------------------------------------------");
 console.log("----------------------------------------------------------------------------------------------------------------");
-console.log(`WebSocket server listening on port ${poolPort}...`);
+console.log(`WebSocket server listening on port ${poolPortEx}...`);
 
 wss.on('connection', (ws) => {
   console.log('WebSocket client connected');
