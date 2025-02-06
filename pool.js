@@ -19,47 +19,18 @@ const httpServer = http.createServer((req, res) => {
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Content-Type', 'application/json');
   
-  if (req.url === '/poolMap' && req.method === 'GET') {
-    res.setHeader('Content-Type', 'application/json');
-    // Convert Map to array of objects for JSON serialization
-    const poolData = Array.from(poolMap.entries()).map(([id, client]) => ({
-      id,
-      ...client,
-      ws: undefined // Remove ws instance from response
-    }));
-    res.end(JSON.stringify(poolData));
-  } else if (req.url === '/wsIdAtHighestBlock' && req.method === 'GET') {
-    res.setHeader('Content-Type', 'application/json');
-    
-    // Get all entries with block numbers
-    const entriesWithBlocks = Array.from(poolMap.entries())
-      .map(([id, client]) => ({
-        wsID: id,
-        blockNumber: client.block_number ? parseInt(client.block_number) : -1
-      }))
-      .filter(entry => entry.blockNumber >= 0);
-
-    if (entriesWithBlocks.length === 0) {
-      res.end(JSON.stringify({ wsIDs: [], highestBlock: null }));
-      return;
-    }
-
-    // Find the highest block
-    const highestBlock = Math.max(...entriesWithBlocks.map(e => e.blockNumber));
-    
-    // Get all wsIDs at the highest block
-    const wsIDsAtHighestBlock = entriesWithBlocks
-      .filter(entry => entry.blockNumber === highestBlock)
-      .map(entry => entry.wsID);
-
-    res.end(JSON.stringify({
-      wsIDs: wsIDsAtHighestBlock,
-      highestBlock: highestBlock
-    }));
+  if (req.url === '/requestPool' && req.method === 'GET') {
+    // TODO: Implement requestPool
   } else {
-    res.statusCode = 404;
-    res.end('Not Found');
+    const response = {
+      jsonrpc: "2.0",
+      result: "0x14c7f37",
+      id: 0
+    };
+    res.statusCode = 200;
+    res.end(JSON.stringify(response));
   }
 });
 
