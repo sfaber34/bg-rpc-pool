@@ -1,9 +1,11 @@
-const poolPortEx = 48546;
-const poolPortIn = 3003;
+const portPoolPublic = 48546;
+const portPoolToProxy = 3003;
+const portProxyToPool = 3004;
 const wsHeartbeatInterval = 30000; // 30 seconds
 
 module.exports = {
-  poolPortEx,
-  poolPortIn,
+  portPoolPublic,
+  portPoolToProxy,
+  portProxyToPool,
   wsHeartbeatInterval,
 };
