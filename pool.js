@@ -120,11 +120,11 @@ const httpServer = https.createServer({
               },
               id: rpcRequest.id
             };
-            console.error('[Pool] Error response:', JSON.stringify(errorResponse));
+            console.error('Error response:', JSON.stringify(errorResponse));
             res.end(JSON.stringify(errorResponse));
           }
         } catch (error) {
-          console.error('[Pool] Caught error:', error);
+          console.error('Caught error:', error);
           res.statusCode = 500;
           res.end(JSON.stringify({
             jsonrpc: "2.0",
@@ -170,33 +170,33 @@ function generateMessageId(message, clientIp) {
 function selectRandomClients(nClients) {
   // Get all clients and their block numbers
   const clients = Array.from(poolMap.values());
-  console.log(`[Pool] Total connected clients: ${clients.length}`);
+  console.log(`Total connected clients: ${clients.length}`);
   
   if (clients.length === 0) {
-    console.log('[Pool] No clients connected to the pool');
+    console.log('No clients connected to the pool');
     return { error: "No clients connected to the pool" };
   }
 
   // Find the highest block number
   const clientsWithBlocks = clients.filter(client => client.block_number !== undefined);
-  console.log(`[Pool] Clients with block numbers: ${clientsWithBlocks.length}`);
+  console.log(`Clients with block numbers: ${clientsWithBlocks.length}`);
   
   if (clientsWithBlocks.length === 0) {
-    console.log('[Pool] No clients have reported their block number yet');
+    console.log('No clients have reported their block number yet');
     return { error: "No clients have reported their block number yet" };
   }
 
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
-  console.log(`[Pool] Highest block number: ${highestBlock}`);
+  console.log(`Highest block number: ${highestBlock}`);
 
   // Filter clients at the highest block
   const highestBlockClients = clients.filter(
     client => parseInt(client.block_number) === highestBlock
   );
-  console.log(`[Pool] Clients at highest block: ${highestBlockClients.length}`);
+  console.log(`Clients at highest block: ${highestBlockClients.length}`);
 
   if (highestBlockClients.length < nClients) {
-    console.log(`[Pool] Not enough clients at highest block. Requested: ${nClients}, Available: ${highestBlockClients.length}`);
+    console.log(`Not enough clients at highest block. Requested: ${nClients}, Available: ${highestBlockClients.length}`);
     return {
       error: `Not enough clients at highest block ${highestBlock}. Requested: ${nClients}, Available: ${highestBlockClients.length}`
     };
@@ -213,7 +213,7 @@ function selectRandomClients(nClients) {
     availableClients.splice(randomIndex, 1);
   }
 
-  console.log(`[Pool] Selected ${selectedClients.size} clients at block ${highestBlock}`);
+  console.log(`Selected ${selectedClients.size} clients at block ${highestBlock}`);
   return {
     socket_ids: Array.from(selectedClients),
     block_number: highestBlock
@@ -223,10 +223,10 @@ function selectRandomClients(nClients) {
 async function handleRequest(rpcRequest, client, timeout = 15000) {
   return new Promise((resolve, reject) => {
     try {
-      console.log(`[Pool] Handling RPC request: ${JSON.stringify(rpcRequest)}`);
+      console.log(`Handling RPC request: ${JSON.stringify(rpcRequest)}`);
       
       if (!client || !client.ws || !client.ws.readyState === WebSocket.OPEN) {
-        console.log('[Pool] Client socket is not connected');
+        console.log('Client socket is not connected');
         return resolve({ 
           status: 'error', 
           data: {
@@ -239,7 +239,7 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
       // Set up response handler
       const responseHandler = (response) => {
         try {
-          console.log(`[Pool] Received WebSocket response: ${response}`);
+          console.log(`Received WebSocket response: ${response}`);
           const parsedResponse = JSON.parse(response);
           
           // Check if this is a checkin message
@@ -255,22 +255,22 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
             clearTimeout(timeoutId);
             
             if (parsedResponse.error) {
-              console.log(`[Pool] RPC error response: ${JSON.stringify(parsedResponse.error)}`);
+              console.log(`RPC error response: ${JSON.stringify(parsedResponse.error)}`);
               resolve({ status: 'error', data: parsedResponse.error });
             } else {
-              console.log(`[Pool] RPC success response: ${JSON.stringify(parsedResponse.result)}`);
+              console.log(`RPC success response: ${JSON.stringify(parsedResponse.result)}`);
               resolve({ status: 'success', data: parsedResponse.result });
             }
           }
         } catch (error) {
-          console.error('[Pool] Error parsing response:', error);
+          console.error('Error parsing response:', error);
           // Don't resolve here, let the timeout handle it
         }
       };
 
       // Set up timeout
       const timeoutId = setTimeout(() => {
-        console.log(`[Pool] Request timed out after ${timeout/1000} seconds`);
+        console.log(`Request timed out after ${timeout/1000} seconds`);
         client.ws.removeListener('message', responseHandler);
         resolve({ 
           status: 'error', 
@@ -285,10 +285,10 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
       client.ws.on('message', responseHandler);
 
       // Send the request
-      console.log(`[Pool] Sending request to WebSocket client: ${JSON.stringify(rpcRequest)}`);
+      console.log(`Sending request to WebSocket client: ${JSON.stringify(rpcRequest)}`);
       client.ws.send(JSON.stringify(rpcRequest));
     } catch (error) {
-      console.error('[Pool] Error in handleRequest:', error);
+      console.error('Error in handleRequest:', error);
       resolve({ 
         status: 'error', 
         data: {
