@@ -29,6 +29,22 @@ const httpServer = https.createServer({
   
   if (req.url === '/requestPool' && req.method === 'POST') {
     let body = '';
+    
+    // Handle request errors
+    req.on('error', (err) => {
+      console.error('Error in request:', err);
+      res.statusCode = 500;
+      res.end(JSON.stringify({
+        jsonrpc: "2.0",
+        error: {
+          code: -32603,
+          message: "Internal error",
+          data: err.message
+        },
+        id: null
+      }));
+    });
+
     req.on('data', chunk => {
       body += chunk.toString();
     });
@@ -36,9 +52,11 @@ const httpServer = https.createServer({
     req.on('end', async () => {
       try {
         const rpcRequest = JSON.parse(body);
+        console.log('Received RPC request:', JSON.stringify(rpcRequest, null, 2));
         
         // Validate RPC request format
-        if (!rpcRequest.jsonrpc || !rpcRequest.method || !rpcRequest.id) {
+        if (!rpcRequest.jsonrpc || rpcRequest.jsonrpc !== "2.0" || !rpcRequest.method || rpcRequest.id === undefined) {
+          console.error('Invalid RPC request format:', JSON.stringify(rpcRequest, null, 2));
           res.statusCode = 400;
           res.end(JSON.stringify({
             jsonrpc: "2.0",
@@ -83,7 +101,7 @@ const httpServer = https.createServer({
         }
 
         try {
-          const result = await handleRequest(rpcRequest, client.ws);
+          const result = await handleRequest(rpcRequest, client);
           if (result.status === 'success') {
             res.statusCode = 200;
             res.end(JSON.stringify({
@@ -202,12 +220,12 @@ function selectRandomClients(nClients) {
   };
 }
 
-async function handleRequest(rpcRequest, clientSocket, timeout = 15000) {
+async function handleRequest(rpcRequest, client, timeout = 15000) {
   return new Promise((resolve, reject) => {
     try {
       console.log(`[Pool] Handling RPC request: ${JSON.stringify(rpcRequest)}`);
       
-      if (!clientSocket || !clientSocket.readyState === WebSocket.OPEN) {
+      if (!client || !client.ws || !client.ws.readyState === WebSocket.OPEN) {
         console.log('[Pool] Client socket is not connected');
         return resolve({ 
           status: 'error', 
@@ -224,10 +242,16 @@ async function handleRequest(rpcRequest, clientSocket, timeout = 15000) {
           console.log(`[Pool] Received WebSocket response: ${response}`);
           const parsedResponse = JSON.parse(response);
           
-          // Check if this response matches our request ID
-          if (parsedResponse.jsonrpc === '2.0' && parsedResponse.id === rpcRequest.id) {
+          // Check if this is a checkin message
+          if (parsedResponse.type === 'checkin') {
+            return; // Ignore checkin messages
+          }
+          
+          // Check if this response matches our request method and has a valid response
+          if (parsedResponse.jsonrpc === '2.0' && 
+              (parsedResponse.result !== undefined || parsedResponse.error !== undefined)) {
             // Remove the message listener to prevent memory leaks
-            clientSocket.removeListener('message', responseHandler);
+            client.ws.removeListener('message', responseHandler);
             clearTimeout(timeoutId);
             
             if (parsedResponse.error) {
@@ -237,8 +261,6 @@ async function handleRequest(rpcRequest, clientSocket, timeout = 15000) {
               console.log(`[Pool] RPC success response: ${JSON.stringify(parsedResponse.result)}`);
               resolve({ status: 'success', data: parsedResponse.result });
             }
-          } else {
-            console.log(`[Pool] Response ID mismatch. Expected ${rpcRequest.id}, got ${parsedResponse.id}`);
           }
         } catch (error) {
           console.error('[Pool] Error parsing response:', error);
@@ -249,7 +271,7 @@ async function handleRequest(rpcRequest, clientSocket, timeout = 15000) {
       // Set up timeout
       const timeoutId = setTimeout(() => {
         console.log(`[Pool] Request timed out after ${timeout/1000} seconds`);
-        clientSocket.removeListener('message', responseHandler);
+        client.ws.removeListener('message', responseHandler);
         resolve({ 
           status: 'error', 
           data: {
@@ -260,11 +282,11 @@ async function handleRequest(rpcRequest, clientSocket, timeout = 15000) {
       }, timeout);
 
       // Add message listener
-      clientSocket.on('message', responseHandler);
+      client.ws.on('message', responseHandler);
 
-      // Send the request as is - maintaining JSON-RPC format
+      // Send the request
       console.log(`[Pool] Sending request to WebSocket client: ${JSON.stringify(rpcRequest)}`);
-      clientSocket.send(JSON.stringify(rpcRequest));
+      client.ws.send(JSON.stringify(rpcRequest));
     } catch (error) {
       console.error('[Pool] Error in handleRequest:', error);
       resolve({ 
