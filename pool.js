@@ -1,4 +1,4 @@
-const WebSocket = require('ws');
+const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 const http = require('http');
@@ -9,13 +9,21 @@ const { portPoolPublic, poolPort, wsHeartbeatInterval } = require('./config');
 
 const poolMap = new Map();
 
-// SSL configuration for WebSocket server
+// SSL configuration for Socket.IO server
 const wsServer = https.createServer({
   key: fs.readFileSync('/home/ubuntu/shared/server.key'),
   cert: fs.readFileSync('/home/ubuntu/shared/server.cert')
 });
 
-const wss = new WebSocket.Server({ server: wsServer });
+// Initialize Socket.IO with CORS and ping configurations
+const io = new Server(wsServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  },
+  pingInterval: wsHeartbeatInterval,
+  pingTimeout: wsHeartbeatInterval * 2
+});
 
 // Create HTTP server for the API endpoint (no SSL)
 const httpServer = https.createServer({
@@ -87,7 +95,7 @@ const httpServer = https.createServer({
         const clientId = selectedClients.socket_ids[0];
         const client = poolMap.get(clientId);
         
-        if (!client || !client.ws) {
+        if (!client || !client.socket) {
           res.statusCode = 503;
           res.end(JSON.stringify({
             jsonrpc: "2.0",
@@ -225,68 +233,50 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
     try {
       console.log(`Handling RPC request: ${JSON.stringify(rpcRequest)}`);
       
-      if (!client || !client.ws || !client.ws.readyState === WebSocket.OPEN) {
+      if (!client || !client.socket || !client.socket.connected) {
         console.log('Client socket is not connected');
         return resolve({ 
           status: 'error', 
           data: {
             code: -32603,
-            message: 'WebSocket connection is not open'
+            message: 'Socket.IO connection is not open'
           }
         });
       }
 
-      // Set up response handler
-      const responseHandler = (response) => {
-        try {
-          console.log(`Received WebSocket response: ${response}`);
-          const parsedResponse = JSON.parse(response);
-          
-          // Check if this is a checkin message
-          if (parsedResponse.type === 'checkin') {
-            return; // Ignore checkin messages
-          }
-          
-          // Check if this response matches our request method and has a valid response
-          if (parsedResponse.jsonrpc === '2.0' && 
-              (parsedResponse.result !== undefined || parsedResponse.error !== undefined)) {
-            // Remove the message listener to prevent memory leaks
-            client.ws.removeListener('message', responseHandler);
-            clearTimeout(timeoutId);
-            
-            if (parsedResponse.error) {
-              console.log(`RPC error response: ${JSON.stringify(parsedResponse.error)}`);
-              resolve({ status: 'error', data: parsedResponse.error });
-            } else {
-              console.log(`RPC success response: ${JSON.stringify(parsedResponse.result)}`);
-              resolve({ status: 'success', data: parsedResponse.result });
+      // Use Socket.IO's acknowledgment system
+      client.socket.timeout(timeout).emit('rpc', rpcRequest, (err, response) => {
+        if (err) {
+          console.log(`Request timed out after ${timeout/1000} seconds`);
+          resolve({ 
+            status: 'error', 
+            data: {
+              code: -32603,
+              message: `Request timed out after ${timeout/1000} seconds`
             }
+          });
+          return;
+        }
+
+        try {
+          if (response.error) {
+            console.log(`RPC error response: ${JSON.stringify(response.error)}`);
+            resolve({ status: 'error', data: response.error });
+          } else {
+            console.log(`RPC success response: ${JSON.stringify(response.result)}`);
+            resolve({ status: 'success', data: response.result });
           }
         } catch (error) {
-          console.error('Error parsing response:', error);
-          // Don't resolve here, let the timeout handle it
+          console.error('Error processing response:', error);
+          resolve({ 
+            status: 'error', 
+            data: {
+              code: -32603,
+              message: error.message || 'Internal error'
+            }
+          });
         }
-      };
-
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        console.log(`Request timed out after ${timeout/1000} seconds`);
-        client.ws.removeListener('message', responseHandler);
-        resolve({ 
-          status: 'error', 
-          data: {
-            code: -32603,
-            message: `Request timed out after ${timeout/1000} seconds`
-          }
-        });
-      }, timeout);
-
-      // Add message listener
-      client.ws.on('message', responseHandler);
-
-      // Send the request
-      console.log(`Sending request to WebSocket client: ${JSON.stringify(rpcRequest)}`);
-      client.ws.send(JSON.stringify(rpcRequest));
+      });
     } catch (error) {
       console.error('Error in handleRequest:', error);
       resolve({ 
@@ -303,71 +293,51 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
 console.log("----------------------------------------------------------------------------------------------------------------");
 console.log("----------------------------------------------------------------------------------------------------------------");
 wsServer.listen(portPoolPublic, () => {
-  console.log(`WebSocket (portPoolPublic) server listening on port ${portPoolPublic}...`);
+  console.log(`Socket.IO server listening on port ${portPoolPublic}...`);
 });
 
 httpServer.listen(poolPort, () => {
   console.log(`HTTP server (poolPort) listening on port ${poolPort}...`);
 });
 
-wss.on('connection', (ws) => {
-  console.log('WebSocket client connected');
+io.on('connection', (socket) => {
+  console.log(`Socket.IO client ${socket.id} connected`);
 
-  const wsID = uuidv4();
-  console.log(`Client ID: ${wsID}`);
+  const client = { socket, wsID: socket.id };
+  poolMap.set(socket.id, client);
+  socket.emit('init', { id: socket.id });
 
-  const client = {ws, wsID};
-  poolMap.set(wsID, client);
-  ws.send(JSON.stringify({id: wsID}));
-
-  ws.isAlive = true;
-  ws.on('pong', () => {
-    ws.isAlive = true;
-  });
-
-  ws.on('ping', () => {
-    ws.pong();
-  });
-
-  // Set up the persistent message listener
-  ws.on('message', async (message) => {
+  // Handle checkin messages
+  socket.on('checkin', (message) => {
     try {
-      const parsedMessage = JSON.parse(message);
+      // Handle both old and new format
+      const params = message.params || message;
+      const existingClient = poolMap.get(socket.id);
+      poolMap.set(socket.id, { ...existingClient, ...params });
+      console.log(`Updated client ${socket.id} in pool. id: ${params.id}, block_number: ${params.block_number}`);
+    } catch (error) {
+      console.error('Error processing checkin message:', error, message);
+    }
+  });
 
-      if (parsedMessage.type === 'checkin') {
-        // Update the client info in poolMap with the checkin params
-        const existingClient = poolMap.get(wsID);
-        poolMap.set(wsID, { ...existingClient, ...parsedMessage.params });
-        console.log(`Updated client ${wsID} in pool. id: ${parsedMessage.params.id}, block_number: ${parsedMessage.params.block_number}`);
-      } else if (parsedMessage.jsonrpc === '2.0') {
-        // This is an RPC response, handle it through the handleRequest utility
-        console.log('Received RPC response:', parsedMessage);
+  // Handle RPC messages
+  socket.on('rpc', async (request, callback) => {
+    try {
+      console.log('Received RPC request:', request);
+      if (request.jsonrpc === '2.0') {
+        callback(request); // Send back the response using Socket.IO's acknowledgment
       } else {
-        console.log('Received message with unknown type:', parsedMessage);
+        console.log('Received message with unknown format:', request);
+        callback({ error: { code: -32600, message: "Invalid request format" } });
       }
     } catch (error) {
-      console.error('Error processing message:', error);
+      console.error('Error processing RPC message:', error);
+      callback({ error: { code: -32603, message: error.message || "Internal error" } });
     }
   });
 
-  ws.on('close', () => {
-    console.log('WebSocket client disconnected');
-    poolMap.delete(wsID);
+  socket.on('disconnect', () => {
+    console.log(`Socket.IO client ${socket.id} disconnected`);
+    poolMap.delete(socket.id);
   });
-});
-
-// Set up an interval to check for dead connections
-const interval = setInterval(() => {
-  wss.clients.forEach((ws) => {
-    if (ws.isAlive === false) {
-      console.log('Terminating inactive WebSocket connection');
-      return ws.terminate();
-    }
-    ws.isAlive = false;
-    ws.ping();
-  });
-}, wsHeartbeatInterval);
-
-wss.on('close', () => {
-  clearInterval(interval);
 });
