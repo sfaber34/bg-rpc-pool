@@ -92,18 +92,21 @@ const httpServer = https.createServer({
               id: rpcRequest.id
             }));
           } else {
+            // For error responses, pass through the error message
             res.statusCode = 500;
-            res.end(JSON.stringify({
+            const errorResponse = {
               jsonrpc: "2.0",
               error: {
                 code: -32603,
-                message: "Internal error",
-                data: result.data
+                message: result.data.message || result.data || "Internal error"
               },
               id: rpcRequest.id
-            }));
+            };
+            console.error('[Pool] Error response:', JSON.stringify(errorResponse));
+            res.end(JSON.stringify(errorResponse));
           }
         } catch (error) {
+          console.error('[Pool] Caught error:', error);
           res.statusCode = 500;
           res.end(JSON.stringify({
             jsonrpc: "2.0",
@@ -208,7 +211,10 @@ async function handleRequest(rpcRequest, clientSocket, timeout = 15000) {
         console.log('[Pool] Client socket is not connected');
         return resolve({ 
           status: 'error', 
-          data: 'WebSocket connection is not open' 
+          data: {
+            code: -32603,
+            message: 'WebSocket connection is not open'
+          }
         });
       }
 
@@ -246,7 +252,10 @@ async function handleRequest(rpcRequest, clientSocket, timeout = 15000) {
         clientSocket.removeListener('message', responseHandler);
         resolve({ 
           status: 'error', 
-          data: `Request timed out after ${timeout/1000} seconds` 
+          data: {
+            code: -32603,
+            message: `Request timed out after ${timeout/1000} seconds`
+          }
         });
       }, timeout);
 
@@ -260,7 +269,10 @@ async function handleRequest(rpcRequest, clientSocket, timeout = 15000) {
       console.error('[Pool] Error in handleRequest:', error);
       resolve({ 
         status: 'error', 
-        data: error.message || 'Unknown error' 
+        data: {
+          code: -32603,
+          message: error.message || 'Internal error'
+        }
       });
     }
   });
