@@ -118,21 +118,15 @@ const httpServer = https.createServer({
               id: rpcRequest.id
             }));
           } else {
-            // For error responses, pass through the error message
             res.statusCode = 500;
-            const errorResponse = {
+            res.end(JSON.stringify({
               jsonrpc: "2.0",
-              error: {
-                code: -32603,
-                message: result.data.message || result.data || "Internal error"
-              },
+              error: result.data,
               id: rpcRequest.id
-            };
-            console.error('Error response:', JSON.stringify(errorResponse));
-            res.end(JSON.stringify(errorResponse));
+            }));
           }
         } catch (error) {
-          console.error('Caught error:', error);
+          console.error('Error handling request:', error);
           res.statusCode = 500;
           res.end(JSON.stringify({
             jsonrpc: "2.0",
@@ -244,20 +238,8 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
         });
       }
 
-      // Use Socket.IO's acknowledgment system
-      client.socket.timeout(timeout).emit('rpc', rpcRequest, (err, response) => {
-        if (err) {
-          console.log(`Request timed out after ${timeout/1000} seconds`);
-          resolve({ 
-            status: 'error', 
-            data: {
-              code: -32603,
-              message: `Request timed out after ${timeout/1000} seconds`
-            }
-          });
-          return;
-        }
-
+      // Create a one-time response handler for this specific request
+      const responseHandler = (response) => {
         try {
           if (response.error) {
             console.log(`RPC error response: ${JSON.stringify(response.error)}`);
@@ -276,7 +258,30 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
             }
           });
         }
+      };
+
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        client.socket.off('rpc_response', responseHandler);
+        console.log(`Request timed out after ${timeout/1000} seconds`);
+        resolve({ 
+          status: 'error', 
+          data: {
+            code: -32603,
+            message: `Request timed out after ${timeout/1000} seconds`
+          }
+        });
+      }, timeout);
+
+      // Listen for the response
+      client.socket.once('rpc_response', (response) => {
+        clearTimeout(timeoutId);
+        responseHandler(response);
       });
+
+      // Send the request to the client
+      client.socket.emit('rpc_request', rpcRequest);
+
     } catch (error) {
       console.error('Error in handleRequest:', error);
       resolve({ 
@@ -320,19 +325,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle RPC messages
-  socket.on('rpc', async (request, callback) => {
+  // Handle RPC responses from clients
+  socket.on('rpc_response', (response) => {
     try {
-      console.log('Received RPC request:', request);
-      if (request.jsonrpc === '2.0') {
-        callback(request); // Send back the response using Socket.IO's acknowledgment
-      } else {
-        console.log('Received message with unknown format:', request);
-        callback({ error: { code: -32600, message: "Invalid request format" } });
-      }
+      console.log('Received RPC response:', response);
+      // The response will be handled by the callback in handleRequest
     } catch (error) {
-      console.error('Error processing RPC message:', error);
-      callback({ error: { code: -32603, message: error.message || "Internal error" } });
+      console.error('Error processing RPC response:', error);
     }
   });
 
