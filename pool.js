@@ -240,20 +240,29 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
         return retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
       }
 
+      let hasResponded = false;  // Flag to track if we've already handled a response
+
       // Set up timeout for the acknowledgment
       const timeoutId = setTimeout(() => {
-        console.log(`Request timed out after ${timeout/1000} seconds for client ${client.wsID}`);
-        socket.removeAllListeners('rpc_request');  // Clean up the socket listener
-        retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
+        if (!hasResponded) {
+          hasResponded = true;
+          console.log(`Request timed out after ${timeout/1000} seconds for client ${client.wsID}`);
+          retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
+        }
       }, timeout);
 
       // Send the request with an acknowledgment callback
       socket.emit('rpc_request', rpcRequest, (response) => {
+        if (hasResponded) {
+          // If we've already handled a response (e.g., due to timeout), ignore this one
+          return;
+        }
+        
         clearTimeout(timeoutId);
+        hasResponded = true;
         
         if (response.error) {
           console.log(`RPC error response from client ${client.wsID}: ${JSON.stringify(response.error)}`);
-          socket.removeAllListeners('rpc_request');  // Clean up the socket listener
           retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
         } else {
           console.log(`RPC success response: ${JSON.stringify(response.result)}`);
@@ -263,9 +272,6 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
 
     } catch (error) {
       console.error('Error in handleRequest:', error);
-      if (socket) {
-        socket.removeAllListeners('rpc_request');  // Clean up the socket listener
-      }
       retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
     }
   });
