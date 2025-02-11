@@ -238,31 +238,21 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
         });
       }
 
-      // Create a one-time response handler for this specific request
-      const responseHandler = (response) => {
-        try {
-          if (response.error) {
-            console.log(`RPC error response: ${JSON.stringify(response.error)}`);
-            resolve({ status: 'error', data: response.error });
-          } else {
-            console.log(`RPC success response: ${JSON.stringify(response.result)}`);
-            resolve({ status: 'success', data: response.result });
-          }
-        } catch (error) {
-          console.error('Error processing response:', error);
-          resolve({ 
-            status: 'error', 
-            data: {
-              code: -32603,
-              message: error.message || 'Internal error'
-            }
-          });
-        }
-      };
+      // Get the actual socket from io
+      const socket = io.sockets.sockets.get(client.wsID);
 
-      // Set up timeout
+      if (!socket) {
+        return resolve({ 
+          status: 'error', 
+          data: {
+            code: -32603,
+            message: 'Socket not found'
+          }
+        });
+      }
+
+      // Set up timeout for the acknowledgment
       const timeoutId = setTimeout(() => {
-        client.socket.off('rpc_response', responseHandler);
         console.log(`Request timed out after ${timeout/1000} seconds`);
         resolve({ 
           status: 'error', 
@@ -273,14 +263,18 @@ async function handleRequest(rpcRequest, client, timeout = 15000) {
         });
       }, timeout);
 
-      // Listen for the response
-      client.socket.once('rpc_response', (response) => {
+      // Send the request with an acknowledgment callback
+      socket.emit('rpc_request', rpcRequest, (response) => {
         clearTimeout(timeoutId);
-        responseHandler(response);
+        
+        if (response.error) {
+          console.log(`RPC error response: ${JSON.stringify(response.error)}`);
+          resolve({ status: 'error', data: response.error });
+        } else {
+          console.log(`RPC success response: ${JSON.stringify(response.result)}`);
+          resolve({ status: 'success', data: response.result });
+        }
       });
-
-      // Send the request to the client
-      client.socket.emit('rpc_request', rpcRequest);
 
     } catch (error) {
       console.error('Error in handleRequest:', error);
@@ -322,16 +316,6 @@ io.on('connection', (socket) => {
       console.log(`Updated client ${socket.id} in pool. id: ${params.id}, block_number: ${params.block_number}`);
     } catch (error) {
       console.error('Error processing checkin message:', error, message);
-    }
-  });
-
-  // Handle RPC responses from clients
-  socket.on('rpc_response', (response) => {
-    try {
-      console.log('Received RPC response:', response);
-      // The response will be handled by the callback in handleRequest
-    } catch (error) {
-      console.error('Error processing RPC response:', error);
     }
   });
 
