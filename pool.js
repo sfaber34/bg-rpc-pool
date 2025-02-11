@@ -169,7 +169,7 @@ function generateMessageId(message, clientIp) {
   return hash.digest('hex');
 }
 
-function selectRandomClients(nClients) {
+function selectRandomClients(nClients, failedClients = new Set()) {
   // Get all clients and their block numbers
   const clients = Array.from(poolMap.values());
   console.log(`Total connected clients: ${clients.length}`);
@@ -191,11 +191,11 @@ function selectRandomClients(nClients) {
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
   console.log(`Highest block number: ${highestBlock}`);
 
-  // Filter clients at the highest block
+  // Filter clients at the highest block and exclude failed clients
   const highestBlockClients = clients.filter(
-    client => parseInt(client.block_number) === highestBlock
+    client => parseInt(client.block_number) === highestBlock && !failedClients.has(client.wsID)
   );
-  console.log(`Clients at highest block: ${highestBlockClients.length}`);
+  console.log(`Clients at highest block (excluding failed): ${highestBlockClients.length}`);
 
   if (highestBlockClients.length < nClients) {
     console.log(`Not enough clients at highest block. Requested: ${nClients}, Available: ${highestBlockClients.length}`);
@@ -216,51 +216,35 @@ function selectRandomClients(nClients) {
   }
 
   console.log(`Selected ${selectedClients.size} clients at block ${highestBlock}`);
+  console.log('Selected client IDs:', Array.from(selectedClients).join(', '));
   return {
     socket_ids: Array.from(selectedClients),
     block_number: highestBlock
   };
 }
 
-async function handleRequest(rpcRequest, client, timeout = socketTimeout) {
+async function handleRequest(rpcRequest, client, timeout = socketTimeout, failedClients = new Set()) {
   return new Promise((resolve, reject) => {
     try {
       console.log(`Handling RPC request: ${JSON.stringify(rpcRequest)}`);
       
       if (!client || !client.socket || !client.socket.connected) {
         console.log('Client socket is not connected');
-        return resolve({ 
-          status: 'error', 
-          data: {
-            code: -32603,
-            message: 'Socket.IO connection is not open'
-          }
-        });
+        return retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
       }
 
       // Get the actual socket from io
       const socket = io.sockets.sockets.get(client.wsID);
 
       if (!socket) {
-        return resolve({ 
-          status: 'error', 
-          data: {
-            code: -32603,
-            message: 'Socket not found'
-          }
-        });
+        return retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
       }
 
       // Set up timeout for the acknowledgment
       const timeoutId = setTimeout(() => {
-        console.log(`Request timed out after ${timeout/1000} seconds`);
-        resolve({ 
-          status: 'error', 
-          data: {
-            code: -32603,
-            message: `Request timed out after ${timeout/1000} seconds`
-          }
-        });
+        console.log(`Request timed out after ${timeout/1000} seconds for client ${client.wsID}`);
+        socket.removeAllListeners('rpc_request');  // Clean up the socket listener
+        retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
       }, timeout);
 
       // Send the request with an acknowledgment callback
@@ -268,8 +252,9 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout) {
         clearTimeout(timeoutId);
         
         if (response.error) {
-          console.log(`RPC error response: ${JSON.stringify(response.error)}`);
-          resolve({ status: 'error', data: response.error });
+          console.log(`RPC error response from client ${client.wsID}: ${JSON.stringify(response.error)}`);
+          socket.removeAllListeners('rpc_request');  // Clean up the socket listener
+          retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
         } else {
           console.log(`RPC success response: ${JSON.stringify(response.result)}`);
           resolve({ status: 'success', data: response.result });
@@ -278,15 +263,53 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout) {
 
     } catch (error) {
       console.error('Error in handleRequest:', error);
-      resolve({ 
-        status: 'error', 
-        data: {
-          code: -32603,
-          message: error.message || 'Internal error'
-        }
-      });
+      if (socket) {
+        socket.removeAllListeners('rpc_request');  // Clean up the socket listener
+      }
+      retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
     }
   });
+}
+
+async function retryWithDifferentClient(rpcRequest, failedClient, failedClients, timeout, resolve) {
+  // Add the failed client to the set of failed clients
+  if (failedClient) {
+    failedClients.add(failedClient.wsID);
+  }
+
+  console.log(`🤞 Retrying request with different client. Failed clients so far: ${Array.from(failedClients).join(', ')}`);
+
+  // Get a new client, excluding the failed ones
+  const selectedClients = selectRandomClients(1, failedClients);
+  
+  if (selectedClients.error) {
+    // If we can't find any more clients, return the error
+    console.log('No more available clients to retry with');
+    return resolve({ 
+      status: 'error', 
+      data: {
+        code: -32603,
+        message: 'All available clients failed to process the request'
+      }
+    });
+  }
+
+  const newClientId = selectedClients.socket_ids[0];
+  const newClient = poolMap.get(newClientId);
+
+  if (!newClient) {
+    return resolve({ 
+      status: 'error', 
+      data: {
+        code: -32603,
+        message: 'Selected client is no longer connected'
+      }
+    });
+  }
+
+  // Retry the request with the new client
+  const result = await handleRequest(rpcRequest, newClient, timeout, failedClients);
+  resolve(result);
 }
 
 console.log("----------------------------------------------------------------------------------------------------------------");
