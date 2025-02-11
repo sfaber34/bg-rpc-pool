@@ -5,7 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
 
 const poolMap = new Map();
 
@@ -222,7 +222,7 @@ function selectRandomClients(nClients) {
   };
 }
 
-async function handleRequest(rpcRequest, client, timeout = 15000) {
+async function handleRequest(rpcRequest, client, timeout = socketTimeout) {
   return new Promise((resolve, reject) => {
     try {
       console.log(`Handling RPC request: ${JSON.stringify(rpcRequest)}`);
