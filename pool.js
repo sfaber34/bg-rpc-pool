@@ -1,9 +1,10 @@
 const { Server } = require('socket.io');
-const { v4: uuidv4 } = require('uuid');
 const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
+
+const { incrementOwnerPoints } = require('./database_scripts/incrementOwnerPoints');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
 
@@ -252,7 +253,7 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
       }, timeout);
 
       // Send the request with an acknowledgment callback
-      socket.emit('rpc_request', rpcRequest, (response) => {
+      socket.emit('rpc_request', rpcRequest, async (response) => {
         if (hasResponded) {
           // If we've already handled a response (e.g., due to timeout), ignore this one
           return;
@@ -266,6 +267,20 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
           retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
         } else {
           console.log(`RPC success response: ${JSON.stringify(response.result)}`);
+          
+          // Get the client's owner from poolMap and increment their points
+          const clientData = poolMap.get(client.wsID);
+          if (clientData && clientData.owner) {
+            try {
+              await incrementOwnerPoints(clientData.owner);
+              console.log(`Incremented points for owner: ${clientData.owner}`);
+            } catch (err) {
+              console.error(`Failed to increment points for owner ${clientData.owner}:`, err);
+            }
+          } else {
+            console.warn(`No owner found for client ${client.wsID}`);
+          }
+          
           resolve({ status: 'success', data: response.result });
         }
       });
