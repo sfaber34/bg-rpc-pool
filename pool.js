@@ -8,6 +8,8 @@ const { setImmediate } = require('timers');
 const { incrementOwnerPoints } = require('./database_scripts/incrementOwnerPoints');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
 const { getEnodesObject } = require('./utils/getEnodesObject');
+const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
+const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
 
@@ -51,13 +53,13 @@ const wsServer = https.createServer({
 
   if (req.url === '/peerids') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ peerids: [] }));
+    res.end(JSON.stringify(getPeerIdsObject(poolMap)));
     return;
   }
 
   if (req.url === '/consensusPeerAddr') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ consensusPeerAddr: [] }));
+    res.end(JSON.stringify(getConsensusPeerAddrObject(poolMap)));
     return;
   }
   
