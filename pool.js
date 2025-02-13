@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { setImmediate } = require('timers');
 
 const { incrementOwnerPoints } = require('./database_scripts/incrementOwnerPoints');
+const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
 
@@ -15,6 +16,35 @@ const poolMap = new Map();
 const wsServer = https.createServer({
   key: fs.readFileSync('/home/ubuntu/shared/server.key'),
   cert: fs.readFileSync('/home/ubuntu/shared/server.cert')
+}, async (req, res) => {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
+  // Handle /yourpoints endpoint
+  if (req.url.startsWith('/yourpoints')) {
+    const url = new URL(req.url, `https://${req.headers.host}`);
+    const owner = url.searchParams.get('owner');
+    
+    if (owner) {
+      try {
+        const points = await getOwnerPoints(owner);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ owner, points }));
+      } catch (error) {
+        console.error('Error retrieving points:', error);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ owner, points: 0 }));
+      }
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ owner: '', points: 0 }));
+    }
+    return;
+  }
+  
+  // For any other endpoints, return 404
+  res.writeHead(404, { 'Content-Type': 'text/plain' });
+  res.end('Not Found');
 });
 
 // Initialize Socket.IO with CORS and ping configurations
