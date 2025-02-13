@@ -68,7 +68,7 @@ async function backupOwnerPointsTable() {
 
       // Read existing content (if any)
       let existingContent = '';
-      const backupFile = '../ownerPointsTableBackup.txt';
+      const backupFile = '/home/ubuntu/shared/ownerPointsTableBackup.txt';
       if (fs.existsSync(backupFile)) {
         console.log(`Reading existing backup from ${backupFile}...`);
         existingContent = fs.readFileSync(backupFile, 'utf8');

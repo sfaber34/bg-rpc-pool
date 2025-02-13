@@ -27,6 +27,3 @@ Thumbs.db
 # SSL files
 server.key
 server.cert
-
-# Backup files
-ownerPointsTableBackup.txt
