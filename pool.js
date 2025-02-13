@@ -3,6 +3,7 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
+const { setImmediate } = require('timers');
 
 const { incrementOwnerPoints } = require('./database_scripts/incrementOwnerPoints');
 
@@ -27,7 +28,7 @@ const io = new Server(wsServer, {
 });
 
 // Create HTTP server for the API endpoint (no SSL)
-const httpServer = https.createServer({
+const httpsServerInternal = https.createServer({
   key: fs.readFileSync('/home/ubuntu/shared/server.key'),
   cert: fs.readFileSync('/home/ubuntu/shared/server.cert')
 }, async (req, res) => {
@@ -271,12 +272,15 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
           // Get the client's owner from poolMap and increment their points
           const clientData = poolMap.get(client.wsID);
           if (clientData && clientData.owner) {
-            try {
-              await incrementOwnerPoints(clientData.owner);
-              console.log(`Incremented points for owner: ${clientData.owner}`);
-            } catch (err) {
-              console.error(`Failed to increment points for owner ${clientData.owner}:`, err);
-            }
+            // Increment points asynchronously after sending response
+            setImmediate(async () => {
+              try {
+                await incrementOwnerPoints(clientData.owner);
+                console.log(`Incremented points for owner: ${clientData.owner}`);
+              } catch (err) {
+                console.error(`Failed to increment points for owner ${clientData.owner}:`, err);
+              }
+            });
           } else {
             console.warn(`No owner found for client ${client.wsID}`);
           }
@@ -339,7 +343,7 @@ wsServer.listen(portPoolPublic, () => {
   console.log(`Socket.IO server listening on port ${portPoolPublic}...`);
 });
 
-httpServer.listen(poolPort, () => {
+httpsServerInternal.listen(poolPort, () => {
   console.log(`HTTP server (poolPort) listening on port ${poolPort}...`);
 });
 
