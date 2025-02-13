@@ -7,6 +7,7 @@ const { setImmediate } = require('timers');
 
 const { incrementOwnerPoints } = require('./database_scripts/incrementOwnerPoints');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
+const { getEnodesObject } = require('./utils/getEnodesObject');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
 
@@ -39,6 +40,24 @@ const wsServer = https.createServer({
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ owner: '', points: 0 }));
     }
+    return;
+  }
+
+  if (req.url === '/enodes') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(getEnodesObject(poolMap)));
+    return;
+  }
+
+  if (req.url === '/peerids') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ peerids: [] }));
+    return;
+  }
+
+  if (req.url === '/consensusPeerAddr') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ consensusPeerAddr: [] }));
     return;
   }
   
@@ -389,6 +408,7 @@ io.on('connection', (socket) => {
     try {
       // Handle both old and new format
       const params = message.params || message;
+      // console.log(`Received checkin message: ${JSON.stringify(params)}`);
       const existingClient = poolMap.get(socket.id);
       poolMap.set(socket.id, { ...existingClient, ...params });
       console.log(`Updated client ${socket.id} in pool. id: ${params.id}, block_number: ${params.block_number}`);

@@ -22,7 +22,6 @@ async function getOwnerPoints(owner) {
       }
     });
 
-    console.log('Fetching database credentials from AWS Secrets Manager...');
     const command = new GetSecretValueCommand({
       SecretId: secret_name,
       VersionStage: "AWSCURRENT",
@@ -41,7 +40,6 @@ async function getOwnerPoints(owner) {
       }
     };
 
-    console.log(`Connecting to database at ${process.env.DB_HOST}...`);
     const pool = new Pool(dbConfig);
 
     const client = await pool.connect();
