@@ -58,7 +58,7 @@ const wsServer = https.createServer({
     return;
   }
 
-  if (req.url === '/consensusPeerAddr') {
+  if (req.url === '/consensuspeeraddr') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(getConsensusPeerAddrObject(poolMap)));
     return;
