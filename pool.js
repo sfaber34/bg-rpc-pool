@@ -10,6 +10,7 @@ const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
 const { getEnodesObject } = require('./utils/getEnodesObject');
 const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
+const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
 
@@ -85,9 +86,34 @@ const httpsServerInternal = https.createServer({
 }, async (req, res) => {
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET');
   res.setHeader('Content-Type', 'application/json');
   
+  if (req.url === '/poolNodes' && req.method === 'GET') {
+    try {      
+      const poolNodes = getPoolNodesObject(poolMap);
+      
+      const response = JSON.stringify(poolNodes, null, 2);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(response)
+      });
+      res.end(response);
+    } catch (error) {
+      console.error('Error in /poolNodes endpoint:', error);
+      const errorResponse = JSON.stringify({
+        error: 'Internal server error',
+        message: error.message
+      });
+      res.writeHead(500, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(errorResponse)
+      });
+      res.end(errorResponse);
+    }
+    return;
+  }
+
   if (req.url === '/requestPool' && req.method === 'POST') {
     let body = '';
     
