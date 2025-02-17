@@ -1,0 +1,92 @@
+const { Pool } = require('pg');
+const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
+const path = require('path');
+const readline = require('readline');
+
+// Load .env from the project root directory
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+async function confirmAction() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question('This will create or reset the location table. Are you sure? (yes/no): ', (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'yes');
+    });
+  });
+}
+
+async function createLocationTable() {
+  try {
+    if (!process.env.RDS_SECRET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.DB_HOST) {
+      console.error('Required environment variables are missing. Please check your .env file.');
+      console.error('Required: RDS_SECRET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DB_HOST');
+      return;
+    }
+
+    const confirmed = await confirmAction();
+    if (!confirmed) {
+      console.log('Operation cancelled by user');
+      return;
+    }
+
+    const secret_name = process.env.RDS_SECRET_NAME;
+    const secretsClient = new SecretsManagerClient({ 
+      region: "us-east-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      }
+    });
+
+    const command = new GetSecretValueCommand({
+      SecretId: secret_name,
+      VersionStage: "AWSCURRENT",
+    });
+    const data = await secretsClient.send(command);
+    const secret = JSON.parse(data.SecretString);
+
+    const dbConfig = {
+      host: process.env.DB_HOST,
+      user: secret.username,
+      password: secret.password,
+      database: secret.dbname || 'postgres',
+      port: 5432,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    };
+
+    const pool = new Pool(dbConfig);
+
+    const client = await pool.connect();
+    try {
+      // Drop the table if it exists and create a new one
+      await client.query('DROP TABLE IF EXISTS location');
+      await client.query(`
+        CREATE TABLE location (
+          ip INET PRIMARY KEY,
+          continent VARCHAR(255) NOT NULL
+        )`);
+      
+      console.log('Location table created successfully');
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  } catch (error) {
+    console.error('Error creating location table:', error);
+  }
+}
+
+// Execute if run directly
+if (require.main === module) {
+  createLocationTable();
+}
+
+module.exports = { createLocationTable };
+
