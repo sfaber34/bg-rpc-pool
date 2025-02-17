@@ -11,6 +11,7 @@ const { getEnodesObject } = require('./utils/getEnodesObject');
 const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
+const { logNode } = require('./utils/logNode');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
 
@@ -320,12 +321,24 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
       }
 
       let hasResponded = false;  // Flag to track if we've already handled a response
+      const startTime = Date.now();
+      const utcTimestamp = new Date().toISOString();
 
       // Set up timeout for the acknowledgment
       const timeoutId = setTimeout(() => {
         if (!hasResponded) {
           hasResponded = true;
           console.log(`Request timed out after ${timeout/1000} seconds for client ${client.wsID}`);
+          // Log timeout error
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            Date.now() - startTime,
+            'timeout_error',
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
           retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
         }
       }, timeout);
@@ -342,9 +355,30 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
         
         if (response.error) {
           console.log(`RPC error response from client ${client.wsID}: ${JSON.stringify(response.error)}`);
+          // Log error response
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            Date.now() - startTime,
+            response.error,
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
           retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
         } else {
           console.log(`RPC success response: ${JSON.stringify(response.result)}`);
+          
+          // Log successful response
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            Date.now() - startTime,
+            'success',
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
           
           // Get the client's owner from poolMap and increment their points
           const clientData = poolMap.get(client.wsID);
