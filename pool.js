@@ -216,39 +216,8 @@ const httpsServerInternal = https.createServer({
           return;
         }
 
-        // Select a random client
-        const selectedClients = selectRandomClients(1);
-        if (selectedClients.error) {
-          res.statusCode = 503;
-          res.end(JSON.stringify({
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: selectedClients.error
-            },
-            id: rpcRequest.id
-          }));
-          return;
-        }
-
-        const clientId = selectedClients.socket_ids[0];
-        const client = poolMap.get(clientId);
-        
-        if (!client || !client.socket) {
-          res.statusCode = 503;
-          res.end(JSON.stringify({
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Selected client is no longer connected"
-            },
-            id: rpcRequest.id
-          }));
-          return;
-        }
-
         try {
-          const result = await handleRequest(rpcRequest, client);
+          const result = await handleRequestSet(rpcRequest);
           if (result.status === 'success') {
             res.statusCode = 200;
             res.end(JSON.stringify({
@@ -362,142 +331,108 @@ function selectRandomClients(nClients, failedClients = new Set()) {
   };
 }
 
-async function handleRequest(rpcRequest, client, timeout = socketTimeout, failedClients = new Set()) {
+async function handleRequest(socket, client, rpcRequest, timeout = socketTimeout) {
+  return new Promise((resolve, reject) => {
+    let hasResponded = false;  // Flag to track if we've already handled a response
+    const startTime = Date.now();
+    const utcTimestamp = new Date().toISOString();
+
+    // Set up timeout for the acknowledgment
+    const timeoutId = setTimeout(() => {
+      if (!hasResponded) {
+        hasResponded = true;
+        console.log(`Request timed out after ${timeout/1000} seconds for client ${client.wsID}`);
+        // Log timeout error
+        logNode(
+          { body: rpcRequest },
+          startTime,
+          utcTimestamp,
+          Date.now() - startTime,
+          'timeout_error',
+          client.id || 'unknown',
+          client.owner || 'unknown'
+        );
+      }
+    }, timeout);
+
+    // Send the request with an acknowledgment callback
+    socket.emit('rpc_request', rpcRequest, async (response) => {
+      if (hasResponded) {
+        // If we've already handled a response (e.g., due to timeout), ignore this one
+        return;
+      }
+      
+      clearTimeout(timeoutId);
+      hasResponded = true;
+      
+      if (response.error) {
+        console.log(`RPC error response from client ${client.wsID}: ${JSON.stringify(response.error)}`);
+        // Log error response
+        logNode(
+          { body: rpcRequest },
+          startTime,
+          utcTimestamp,
+          Date.now() - startTime,
+          response.error,
+          client.id || 'unknown',
+          client.owner || 'unknown'
+        );
+      } else {
+        // console.log(`RPC success response: ${JSON.stringify(response.result)}`);
+        
+        // Log successful response
+        logNode(
+          { body: rpcRequest },
+          startTime,
+          utcTimestamp,
+          Date.now() - startTime,
+          'success',
+          client.id || 'unknown',
+          client.owner || 'unknown'
+        );
+        
+        // Get the client's owner from poolMap and increment their points
+        const clientData = poolMap.get(client.wsID);
+        if (clientData && clientData.owner) {
+          // Add points to pending queue instead of incrementing immediately
+          addPendingPoints(clientData.owner, 10);
+        } else {
+          console.warn(`No owner found for client ${client.wsID}`);
+        }
+        
+        resolve({ status: 'success', data: response.result });
+      }
+    });
+  });
+}
+
+async function handleRequestSet(rpcRequest, timeout = socketTimeout) {
   return new Promise((resolve, reject) => {
     try {
-      console.log(`Handling RPC request: ${JSON.stringify(rpcRequest)}`);
+      console.log(`Handling RPC request set: ${JSON.stringify(rpcRequest)}`);
+
+      // Select a random client
+      const selectedClients = selectRandomClients(1);
+      const clientId = selectedClients.socket_ids[0];
+      const client = poolMap.get(clientId);
       
       if (!client || !client.socket || !client.socket.connected) {
-        console.log('Client socket is not connected');
-        return retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
+        console.error('Client socket is not connected');
       }
 
       // Get the actual socket from io
       const socket = io.sockets.sockets.get(client.wsID);
 
       if (!socket) {
-        return retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
+        console.error('Client socket is not connected');
       }
 
-      let hasResponded = false;  // Flag to track if we've already handled a response
-      const startTime = Date.now();
-      const utcTimestamp = new Date().toISOString();
-
-      // Set up timeout for the acknowledgment
-      const timeoutId = setTimeout(() => {
-        if (!hasResponded) {
-          hasResponded = true;
-          console.log(`Request timed out after ${timeout/1000} seconds for client ${client.wsID}`);
-          // Log timeout error
-          logNode(
-            { body: rpcRequest },
-            startTime,
-            utcTimestamp,
-            Date.now() - startTime,
-            'timeout_error',
-            client.id || 'unknown',
-            client.owner || 'unknown'
-          );
-          retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
-        }
-      }, timeout);
-
-      // Send the request with an acknowledgment callback
-      socket.emit('rpc_request', rpcRequest, async (response) => {
-        if (hasResponded) {
-          // If we've already handled a response (e.g., due to timeout), ignore this one
-          return;
-        }
-        
-        clearTimeout(timeoutId);
-        hasResponded = true;
-        
-        if (response.error) {
-          console.log(`RPC error response from client ${client.wsID}: ${JSON.stringify(response.error)}`);
-          // Log error response
-          logNode(
-            { body: rpcRequest },
-            startTime,
-            utcTimestamp,
-            Date.now() - startTime,
-            response.error,
-            client.id || 'unknown',
-            client.owner || 'unknown'
-          );
-          retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
-        } else {
-          // console.log(`RPC success response: ${JSON.stringify(response.result)}`);
-          
-          // Log successful response
-          logNode(
-            { body: rpcRequest },
-            startTime,
-            utcTimestamp,
-            Date.now() - startTime,
-            'success',
-            client.id || 'unknown',
-            client.owner || 'unknown'
-          );
-          
-          // Get the client's owner from poolMap and increment their points
-          const clientData = poolMap.get(client.wsID);
-          if (clientData && clientData.owner) {
-            // Add points to pending queue instead of incrementing immediately
-            addPendingPoints(clientData.owner, 10);
-          } else {
-            console.warn(`No owner found for client ${client.wsID}`);
-          }
-          
-          resolve({ status: 'success', data: response.result });
-        }
-      });
+      return handleRequest(socket, client, rpcRequest, timeout);
 
     } catch (error) {
       console.error('Error in handleRequest:', error);
-      retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
     }
   });
-}
-
-async function retryWithDifferentClient(rpcRequest, failedClient, failedClients, timeout, resolve) {
-  // Add the failed client to the set of failed clients
-  if (failedClient) {
-    failedClients.add(failedClient.wsID);
-  }
-
-  console.log(`🤞 Retrying request with different client. Failed clients so far: ${Array.from(failedClients).join(', ')}`);
-
-  // Get a new client, excluding the failed ones
-  const selectedClients = selectRandomClients(1, failedClients);
-  
-  if (selectedClients.error) {
-    // If we can't find any more clients, return the error
-    console.log('No more available clients to retry with');
-    return resolve({ 
-      status: 'error', 
-      data: {
-        code: -32603,
-        message: 'All available clients failed to process the request'
-      }
-    });
-  }
-
-  const newClientId = selectedClients.socket_ids[0];
-  const newClient = poolMap.get(newClientId);
-
-  if (!newClient) {
-    return resolve({ 
-      status: 'error', 
-      data: {
-        code: -32603,
-        message: 'Selected client is no longer connected'
-      }
-    });
-  }
-
-  // Retry the request with the new client
-  const result = await handleRequest(rpcRequest, newClient, timeout, failedClients);
-  resolve(result);
 }
 
 console.log("----------------------------------------------------------------------------------------------------------------");
