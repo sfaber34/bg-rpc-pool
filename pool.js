@@ -331,11 +331,15 @@ function selectRandomClients(nClients) {
   };
 }
 
-async function handleRequest(socket, client, rpcRequest) {
+async function handleRequestSet(rpcRequest) {
   return new Promise((resolve, reject) => {
     let hasResponded = false;  // Flag to track if we've already handled a response
     const startTime = Date.now();
     const utcTimestamp = new Date().toISOString();
+  
+    const selectedClients = selectRandomClients(1);
+    const client = poolMap.get(selectedClients.socket_ids[0]);
+    const socket = io.sockets.sockets.get(client.wsID);
 
     // Set up timeout for the acknowledgment
     const timeoutId = setTimeout(() => {
@@ -404,23 +408,6 @@ async function handleRequest(socket, client, rpcRequest) {
       }
     });
   });
-}
-
-async function handleRequestSet(rpcRequest) {
-  try {
-    console.log(`Handling RPC request set: ${JSON.stringify(rpcRequest)}`);
-
-    // Select a random client
-    const selectedClients = selectRandomClients(1);
-    const client = poolMap.get(selectedClients.socket_ids[0]);
-    const socket = io.sockets.sockets.get(client.wsID);
-
-    return await handleRequest(socket, client, rpcRequest);
-
-  } catch (error) {
-    console.error('Error in handleRequestSet:', error);
-    return { status: 'error', data: { code: -32603, message: error.message || 'Internal error' } };
-  }
 }
 
 console.log("----------------------------------------------------------------------------------------------------------------");
