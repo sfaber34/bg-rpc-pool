@@ -277,7 +277,7 @@ function generateMessageId(message, clientIp) {
   return hash.digest('hex');
 }
 
-function selectRandomClients(nClients, failedClients = new Set()) {
+function selectRandomClients(nClients) {
   // Get all clients and their block numbers
   const clients = Array.from(poolMap.values());
   console.log(`Total connected clients: ${clients.length}`);
@@ -299,11 +299,11 @@ function selectRandomClients(nClients, failedClients = new Set()) {
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
   console.log(`Highest block number: ${highestBlock}`);
 
-  // Filter clients at the highest block and exclude failed clients
+  // Filter clients at the highest block
   const highestBlockClients = clients.filter(
-    client => parseInt(client.block_number) === highestBlock && !failedClients.has(client.wsID)
+    client => parseInt(client.block_number) === highestBlock
   );
-  console.log(`Clients at highest block (excluding failed): ${highestBlockClients.length}`);
+  console.log(`Clients at highest block: ${highestBlockClients.length}`);
 
   if (highestBlockClients.length < nClients) {
     console.log(`Not enough clients at highest block. Requested: ${nClients}, Available: ${highestBlockClients.length}`);
@@ -412,26 +412,12 @@ async function handleRequestSet(rpcRequest, timeout = socketTimeout) {
 
     // Select a random client
     const selectedClients = selectRandomClients(1);
-    
-    if (selectedClients.error) {
-      return { status: 'error', data: { code: -32603, message: selectedClients.error } };
-    }
 
     const clientId = selectedClients.socket_ids[0];
     const client = poolMap.get(clientId);
-    
-    if (!client || !client.socket || !client.socket.connected) {
-      console.error('Client socket is not connected');
-      return { status: 'error', data: { code: -32603, message: 'Client socket is not connected' } };
-    }
 
     // Get the actual socket from io
     const socket = io.sockets.sockets.get(client.wsID);
-
-    if (!socket) {
-      console.error('Socket not found');
-      return { status: 'error', data: { code: -32603, message: 'Socket not found' } };
-    }
 
     return await handleRequest(socket, client, rpcRequest, timeout);
 
