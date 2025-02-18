@@ -5,7 +5,7 @@ const path = require('path');
 // Load .env from the project root directory
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-async function incrementOwnerPoints(owner) {
+async function incrementOwnerPoints(owner, points) {
   try {
     if (!process.env.RDS_SECRET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.DB_HOST) {
       console.error('Required environment variables are missing. Please check your .env file.');
@@ -48,11 +48,11 @@ async function incrementOwnerPoints(owner) {
     try {
       await client.query(`
         INSERT INTO owner_points (owner, points)
-        VALUES ($1, 10)
+        VALUES ($1, $2)
         ON CONFLICT (owner)
-        DO UPDATE SET points = owner_points.points + 10
-      `, [owner]);
-      console.log(`Successfully incremented points for ${owner}`);
+        DO UPDATE SET points = owner_points.points + $2
+      `, [owner, points]);
+      console.log(`Successfully incremented points for ${owner} by ${points}`);
     } finally {
       client.release();
       await pool.end();

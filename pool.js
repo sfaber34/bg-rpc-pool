@@ -13,9 +13,34 @@ const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObje
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { logNode } = require('./utils/logNode');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout, pointUpdateInterval } = require('./config');
 
 const poolMap = new Map();
+
+// Object to track pending points for each owner
+const pendingOwnerPoints = {};
+
+// Process pending points every 10 seconds
+setInterval(async () => {
+  for (const [owner, points] of Object.entries(pendingOwnerPoints)) {
+    if (points > 0) {
+      try {
+        await incrementOwnerPoints(owner, points);
+        // Reset points after successful processing
+        delete pendingOwnerPoints[owner];
+      } catch (err) {
+        console.error(`Failed to process pending points for owner ${owner}:`, err);
+      }
+    }
+  }
+}, pointUpdateInterval);
+
+// Function to add points to pending queue
+function addPendingPoints(owner, pointsToAdd) {
+  if (!owner) return;
+  pendingOwnerPoints[owner] = (pendingOwnerPoints[owner] || 0) + pointsToAdd;
+  console.log(`Added ${pointsToAdd} pending points for owner: ${owner}. Total pending: ${pendingOwnerPoints[owner]}`);
+}
 
 // SSL configuration for Socket.IO server
 const wsServer = https.createServer({
@@ -367,7 +392,7 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
           );
           retryWithDifferentClient(rpcRequest, client, failedClients, timeout, resolve);
         } else {
-          console.log(`RPC success response: ${JSON.stringify(response.result)}`);
+          // console.log(`RPC success response: ${JSON.stringify(response.result)}`);
           
           // Log successful response
           logNode(
@@ -383,15 +408,8 @@ async function handleRequest(rpcRequest, client, timeout = socketTimeout, failed
           // Get the client's owner from poolMap and increment their points
           const clientData = poolMap.get(client.wsID);
           if (clientData && clientData.owner) {
-            // Increment points asynchronously after sending response
-            setImmediate(async () => {
-              try {
-                await incrementOwnerPoints(clientData.owner);
-                console.log(`Incremented points for owner: ${clientData.owner}`);
-              } catch (err) {
-                console.error(`Failed to increment points for owner ${clientData.owner}:`, err);
-              }
-            });
+            // Add points to pending queue instead of incrementing immediately
+            addPendingPoints(clientData.owner, 10);
           } else {
             console.warn(`No owner found for client ${client.wsID}`);
           }
