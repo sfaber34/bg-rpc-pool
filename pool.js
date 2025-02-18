@@ -335,78 +335,103 @@ async function handleRequestSet(rpcRequest) {
   const startTime = Date.now();
   const utcTimestamp = new Date().toISOString();
 
-  const selectedClients = selectRandomClients(1);
-  const client = poolMap.get(selectedClients.socket_ids[0]);
-  const socket = io.sockets.sockets.get(client.wsID);
+  const selectedClients = selectRandomClients(3);
+  if (selectedClients.error) {
+    return { status: 'error', data: selectedClients.error };
+  }
 
+  // Map to store responses from each client
+  const responseMap = new Map();
+
+  // Create a promise that will resolve with the fastest successful response
   return new Promise((resolve, reject) => {
-    let hasResponded = false;  // Flag to track if we've already handled a response
+    let hasResolved = false;  // Flag to track if we've resolved with a response
+    let pendingResponses = selectedClients.socket_ids.length;  // Track remaining responses
 
-    // Set up timeout for the acknowledgment
-    const timeoutId = setTimeout(() => {
-      if (!hasResponded) {
-        hasResponded = true;
-        console.log(`Request timed out after ${socketTimeout/1000} seconds for client ${client.wsID}`);
-        // Log timeout error
-        logNode(
-          { body: rpcRequest },
-          startTime,
-          utcTimestamp,
-          Date.now() - startTime,
-          'timeout_error',
-          client.id || 'unknown',
-          client.owner || 'unknown'
-        );
-      }
-    }, socketTimeout);
+    selectedClients.socket_ids.forEach(clientId => {
+      const client = poolMap.get(clientId);
+      const socket = io.sockets.sockets.get(client.wsID);
+      let hasResponded = false;  // Flag to track if this client has responded
 
-    // Send the request with an acknowledgment callback
-    socket.emit('rpc_request', rpcRequest, async (response) => {
-      if (hasResponded) {
-        // If we've already handled a response (e.g., due to timeout), ignore this one
-        return;
-      }
-      
-      clearTimeout(timeoutId);
-      hasResponded = true;
-      
-      if (response.error) {
-        console.log(`RPC error response from client ${client.wsID}: ${JSON.stringify(response.error)}`);
-        // Log error response
-        logNode(
-          { body: rpcRequest },
-          startTime,
-          utcTimestamp,
-          Date.now() - startTime,
-          response.error,
-          client.id || 'unknown',
-          client.owner || 'unknown'
-        );
-      } else {
-        // console.log(`RPC success response: ${JSON.stringify(response.result)}`);
-        
-        // Log successful response
-        logNode(
-          { body: rpcRequest },
-          startTime,
-          utcTimestamp,
-          Date.now() - startTime,
-          'success',
-          client.id || 'unknown',
-          client.owner || 'unknown'
-        );
-        
-        // Get the client's owner from poolMap and increment their points
-        const clientData = poolMap.get(client.wsID);
-        if (clientData && clientData.owner) {
-          // Add points to pending queue instead of incrementing immediately
-          addPendingPoints(clientData.owner, 10);
-        } else {
-          console.warn(`No owner found for client ${client.wsID}`);
+      // Set up timeout for each client
+      const timeoutId = setTimeout(() => {
+        if (!hasResponded) {
+          hasResponded = true;
+          pendingResponses--;
+          responseMap.set(clientId, { status: 'timeout', time: Date.now() - startTime });
+          
+          // Log timeout error
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            Date.now() - startTime,
+            'timeout_error',
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
+
+          // If this was the last pending response, log the final results
+          if (pendingResponses === 0) {
+            console.log('All RPC responses received:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+          }
         }
+      }, socketTimeout);
+
+      // Send the request to each client
+      socket.emit('rpc_request', rpcRequest, async (response) => {
+        if (hasResponded) return;  // Ignore late responses
         
-        resolve({ status: 'success', data: response.result });
-      }
+        clearTimeout(timeoutId);
+        hasResponded = true;
+        pendingResponses--;
+
+        const responseTime = Date.now() - startTime;
+        
+        if (response.error) {
+          responseMap.set(clientId, { status: 'error', error: response.error, time: responseTime });
+          
+          // Log error response
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            responseTime,
+            response.error,
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
+        } else {
+          responseMap.set(clientId, { status: 'success', result: response.result, time: responseTime });
+          
+          // Log successful response
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            responseTime,
+            'success',
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
+
+          // Get the client's owner from poolMap and increment their points
+          if (client.owner) {
+            addPendingPoints(client.owner, 10);
+          }
+
+          // Resolve with the first successful response if we haven't already
+          if (!hasResolved) {
+            hasResolved = true;
+            resolve({ status: 'success', data: response.result });
+          }
+        }
+
+        // If this was the last pending response, log the final results
+        if (pendingResponses === 0) {
+          console.log('All RPC responses received:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+        }
+      });
     });
   });
 }
