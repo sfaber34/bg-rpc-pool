@@ -140,6 +140,40 @@ const httpsServerInternal = https.createServer({
     return;
   }
 
+  if (req.url === '/nodeContinents' && req.method === 'GET') {
+    try {
+      const continentsData = {
+        "continents": {
+          "North America": 5,
+          "South America": 1,
+          "Europe": 0,
+          "Asia": 0,
+          "Africa": 2,
+          "Australia": 0
+        }
+      };
+      
+      const response = JSON.stringify(continentsData);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(response)
+      });
+      res.end(response);
+    } catch (error) {
+      console.error('Error in /nodeContinents endpoint:', error);
+      const errorResponse = JSON.stringify({
+        error: 'Internal server error',
+        message: error.message
+      });
+      res.writeHead(500, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(errorResponse)
+      });
+      res.end(errorResponse);
+    }
+    return;
+  }
+
   if (req.url === '/requestPool' && req.method === 'POST') {
     let body = '';
     
