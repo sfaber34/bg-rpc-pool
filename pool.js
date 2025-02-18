@@ -331,7 +331,7 @@ function selectRandomClients(nClients) {
   };
 }
 
-async function handleRequest(socket, client, rpcRequest, timeout = socketTimeout) {
+async function handleRequest(socket, client, rpcRequest) {
   return new Promise((resolve, reject) => {
     let hasResponded = false;  // Flag to track if we've already handled a response
     const startTime = Date.now();
@@ -341,7 +341,7 @@ async function handleRequest(socket, client, rpcRequest, timeout = socketTimeout
     const timeoutId = setTimeout(() => {
       if (!hasResponded) {
         hasResponded = true;
-        console.log(`Request timed out after ${timeout/1000} seconds for client ${client.wsID}`);
+        console.log(`Request timed out after ${socketTimeout/1000} seconds for client ${client.wsID}`);
         // Log timeout error
         logNode(
           { body: rpcRequest },
@@ -353,7 +353,7 @@ async function handleRequest(socket, client, rpcRequest, timeout = socketTimeout
           client.owner || 'unknown'
         );
       }
-    }, timeout);
+    }, socketTimeout);
 
     // Send the request with an acknowledgment callback
     socket.emit('rpc_request', rpcRequest, async (response) => {
@@ -406,20 +406,16 @@ async function handleRequest(socket, client, rpcRequest, timeout = socketTimeout
   });
 }
 
-async function handleRequestSet(rpcRequest, timeout = socketTimeout) {
+async function handleRequestSet(rpcRequest) {
   try {
     console.log(`Handling RPC request set: ${JSON.stringify(rpcRequest)}`);
 
     // Select a random client
     const selectedClients = selectRandomClients(1);
-
-    const clientId = selectedClients.socket_ids[0];
-    const client = poolMap.get(clientId);
-
-    // Get the actual socket from io
+    const client = poolMap.get(selectedClients.socket_ids[0]);
     const socket = io.sockets.sockets.get(client.wsID);
 
-    return await handleRequest(socket, client, rpcRequest, timeout);
+    return await handleRequest(socket, client, rpcRequest);
 
   } catch (error) {
     console.error('Error in handleRequestSet:', error);
