@@ -332,14 +332,15 @@ function selectRandomClients(nClients) {
 }
 
 async function handleRequestSet(rpcRequest) {
+  const startTime = Date.now();
+  const utcTimestamp = new Date().toISOString();
+
+  const selectedClients = selectRandomClients(1);
+  const client = poolMap.get(selectedClients.socket_ids[0]);
+  const socket = io.sockets.sockets.get(client.wsID);
+
   return new Promise((resolve, reject) => {
     let hasResponded = false;  // Flag to track if we've already handled a response
-    const startTime = Date.now();
-    const utcTimestamp = new Date().toISOString();
-  
-    const selectedClients = selectRandomClients(1);
-    const client = poolMap.get(selectedClients.socket_ids[0]);
-    const socket = io.sockets.sockets.get(client.wsID);
 
     // Set up timeout for the acknowledgment
     const timeoutId = setTimeout(() => {
