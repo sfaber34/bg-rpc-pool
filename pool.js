@@ -1,11 +1,10 @@
 const { Server } = require('socket.io');
 const https = require('https');
-const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
-const { setImmediate } = require('timers');
 
 const { incrementOwnerPoints } = require('./database_scripts/incrementOwnerPoints');
+const { updateLocationTable } = require('./database_scripts/updateLocationTable');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
 const { getEnodesObject } = require('./utils/getEnodesObject');
 const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
@@ -16,6 +15,7 @@ const { logNode } = require('./utils/logNode');
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout, pointUpdateInterval } = require('./config');
 
 const poolMap = new Map();
+const seenNodes = new Set(); // Track nodes we've already processed
 
 // Object to track pending points for each owner
 const pendingOwnerPoints = {};
@@ -484,7 +484,7 @@ io.on('connection', (socket) => {
   socket.emit('init', { id: socket.id });
 
   // Handle checkin messages
-  socket.on('checkin', (message) => {
+  socket.on('checkin', async (message) => {
     try {
       // Handle both old and new format
       const params = message.params || message;
@@ -492,6 +492,15 @@ io.on('connection', (socket) => {
       const existingClient = poolMap.get(socket.id);
       poolMap.set(socket.id, { ...existingClient, ...params });
       console.log(`Updated client ${socket.id} in pool. id: ${params.id}, block_number: ${params.block_number}`);
+      
+      // Only call updateLocationTable for new nodes
+      if (params.enode && !seenNodes.has(params.enode)) {
+        seenNodes.add(params.enode);
+        // Run updateLocationTable in the background without blocking
+        updateLocationTable(params.enode).catch(err => {
+          console.error('Error in background updateLocationTable:', err);
+        });
+      }
     } catch (error) {
       console.error('Error processing checkin message:', error, message);
     }
