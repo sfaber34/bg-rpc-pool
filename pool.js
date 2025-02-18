@@ -407,32 +407,38 @@ async function handleRequest(socket, client, rpcRequest, timeout = socketTimeout
 }
 
 async function handleRequestSet(rpcRequest, timeout = socketTimeout) {
-  return new Promise((resolve, reject) => {
-    try {
-      console.log(`Handling RPC request set: ${JSON.stringify(rpcRequest)}`);
+  try {
+    console.log(`Handling RPC request set: ${JSON.stringify(rpcRequest)}`);
 
-      // Select a random client
-      const selectedClients = selectRandomClients(1);
-      const clientId = selectedClients.socket_ids[0];
-      const client = poolMap.get(clientId);
-      
-      if (!client || !client.socket || !client.socket.connected) {
-        console.error('Client socket is not connected');
-      }
-
-      // Get the actual socket from io
-      const socket = io.sockets.sockets.get(client.wsID);
-
-      if (!socket) {
-        console.error('Client socket is not connected');
-      }
-
-      return handleRequest(socket, client, rpcRequest, timeout);
-
-    } catch (error) {
-      console.error('Error in handleRequest:', error);
+    // Select a random client
+    const selectedClients = selectRandomClients(1);
+    
+    if (selectedClients.error) {
+      return { status: 'error', data: { code: -32603, message: selectedClients.error } };
     }
-  });
+
+    const clientId = selectedClients.socket_ids[0];
+    const client = poolMap.get(clientId);
+    
+    if (!client || !client.socket || !client.socket.connected) {
+      console.error('Client socket is not connected');
+      return { status: 'error', data: { code: -32603, message: 'Client socket is not connected' } };
+    }
+
+    // Get the actual socket from io
+    const socket = io.sockets.sockets.get(client.wsID);
+
+    if (!socket) {
+      console.error('Socket not found');
+      return { status: 'error', data: { code: -32603, message: 'Socket not found' } };
+    }
+
+    return await handleRequest(socket, client, rpcRequest, timeout);
+
+  } catch (error) {
+    console.error('Error in handleRequestSet:', error);
+    return { status: 'error', data: { code: -32603, message: error.message || 'Internal error' } };
+  }
 }
 
 console.log("----------------------------------------------------------------------------------------------------------------");
