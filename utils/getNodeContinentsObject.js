@@ -8,12 +8,14 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // Initialize nodeContinents with all continents set to 0
 const nodeContinents = {
-    "North America": 0,
-    "South America": 0,
-    "Europe": 0,
-    "Asia": 0,
-    "Africa": 0,
-    "Australia": 0
+    continents: {
+        "North America": 0,
+        "South America": 0,
+        "Europe": 0,
+        "Asia": 0,
+        "Africa": 0,
+        "Australia": 0
+    }
 };
 
 async function getNodeContinentsObject() {
@@ -30,8 +32,8 @@ async function constructNodeContinentsObject(poolMap) {
         }
 
         // Reset all continent counts
-        Object.keys(nodeContinents).forEach(continent => {
-            nodeContinents[continent] = 0;
+        Object.keys(nodeContinents.continents).forEach(continent => {
+            nodeContinents.continents[continent] = 0;
         });
 
         const secret_name = process.env.RDS_SECRET_NAME;
@@ -73,8 +75,8 @@ async function constructNodeContinentsObject(poolMap) {
                     if (result.rows.length > 0) {
                         const continent = result.rows[0].continent;
                         // Increment the counter for this continent if it exists in our object
-                        if (nodeContinents.hasOwnProperty(continent)) {
-                            nodeContinents[continent]++;
+                        if (nodeContinents.continents.hasOwnProperty(continent)) {
+                            nodeContinents.continents[continent]++;
                         }
                     }
                 } catch (err) {
