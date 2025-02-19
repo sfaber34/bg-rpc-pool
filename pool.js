@@ -306,7 +306,7 @@ function selectRandomClients(nClients) {
   console.log(`Clients at highest block: ${highestBlockClients.length}`);
 
   if (highestBlockClients.length < nClients) {
-    console.log(`Not enough clients at highest block. Requested: ${nClients}, Available: ${highestBlockClients.length}`);
+    console.error(`Not enough clients at highest block. Requested: ${nClients}, Available: ${highestBlockClients.length}`);
     return {
       error: `Not enough clients at highest block ${highestBlock}. Requested: ${nClients}, Available: ${highestBlockClients.length}`
     };
@@ -337,7 +337,13 @@ async function handleRequestSet(rpcRequest) {
 
   const selectedClients = selectRandomClients(3);
   if (selectedClients.error) {
-    return { status: 'error', data: selectedClients.error };
+    return { 
+      status: 'error', 
+      data: {
+        code: -32603,
+        message: selectedClients.error
+      }
+    };
   }
 
   // Map to store responses from each client
@@ -436,6 +442,7 @@ async function handleRequestSet(rpcRequest) {
             if (client.owner) {
               addPendingPoints(client.owner, 10);
             }
+            console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
             resolve({ status: 'success', data: response.result });
           }
         }
@@ -443,7 +450,7 @@ async function handleRequestSet(rpcRequest) {
         // If this was the last pending response and we haven't resolved yet, resolve with an error
         if (pendingResponses === 0 && !hasResolved) {
           hasResolved = true;
-          console.log('All RPC responses received:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+          console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
           resolve({ 
             status: 'error', 
             data: {
