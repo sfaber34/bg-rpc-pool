@@ -10,6 +10,7 @@ const { getEnodesObject } = require('./utils/getEnodesObject');
 const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
+const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
 const { logNode } = require('./utils/logNode');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout, pointUpdateInterval } = require('./config');
@@ -142,16 +143,7 @@ const httpsServerInternal = https.createServer({
 
   if (req.url === '/nodeContinents' && req.method === 'GET') {
     try {
-      const continentsData = {
-        "continents": {
-          "North America": 5,
-          "South America": 1,
-          "Europe": 0,
-          "Asia": 0,
-          "Africa": 2,
-          "Australia": 0
-        }
-      };
+      const continentsData = await getNodeContinentsObject();
       
       const response = JSON.stringify(continentsData);
       res.writeHead(200, {
@@ -501,6 +493,11 @@ io.on('connection', (socket) => {
         // Run updateLocationTable in the background without blocking
         updateLocationTable(params.enode).catch(err => {
           console.error('Error in background updateLocationTable:', err);
+        });
+
+        // If this is the first checkin for a node, update the continents data
+        constructNodeContinentsObject(poolMap).catch(err => {
+          console.error('Error updating node continents:', err);
         });
       }
     } catch (error) {
