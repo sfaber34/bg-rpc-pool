@@ -351,12 +351,11 @@ async function handleRequestSet(rpcRequest) {
     selectedClients.socket_ids.forEach(clientId => {
       const client = poolMap.get(clientId);
       const socket = io.sockets.sockets.get(client.wsID);
-      let hasResponded = false;  // Flag to track if this client has responded
+      let hasReceivedResponse = false;  // Track if this specific client has responded
 
       // Set up timeout for each client
       const timeoutId = setTimeout(() => {
-        if (!hasResponded) {
-          hasResponded = true;
+        if (!hasReceivedResponse) {  // Only timeout if we haven't received a response
           pendingResponses--;
           responseMap.set(clientId, { status: 'timeout', time: Date.now() - startTime });
           
@@ -380,18 +379,9 @@ async function handleRequestSet(rpcRequest) {
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
-        if (hasResponded) return;  // Ignore late responses
-        
-        clearTimeout(timeoutId);
-        hasResponded = true;
-        pendingResponses--;
-
+        // ALWAYS log every response immediately, no conditions
         const responseTime = Date.now() - startTime;
-        
         if (response.error) {
-          responseMap.set(clientId, { status: 'error', error: response.error, time: responseTime });
-          
-          // Log error response
           logNode(
             { body: rpcRequest },
             startTime,
@@ -402,9 +392,6 @@ async function handleRequestSet(rpcRequest) {
             client.owner || 'unknown'
           );
         } else {
-          responseMap.set(clientId, { status: 'success', result: response.result, time: responseTime });
-          
-          // Log successful response
           logNode(
             { body: rpcRequest },
             startTime,
@@ -414,22 +401,34 @@ async function handleRequestSet(rpcRequest) {
             client.id || 'unknown',
             client.owner || 'unknown'
           );
-
-          // Get the client's owner from poolMap and increment their points
-          if (client.owner) {
-            addPendingPoints(client.owner, 10);
-          }
-
-          // Resolve with the first successful response if we haven't already
-          if (!hasResolved) {
-            hasResolved = true;
-            resolve({ status: 'success', data: response.result });
-          }
         }
 
-        // If this was the last pending response, log the final results
-        if (pendingResponses === 0) {
-          console.log('All RPC responses received:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+        // Handle state management only for first response from this client
+        if (!hasReceivedResponse) {
+          hasReceivedResponse = true;
+          clearTimeout(timeoutId);
+          pendingResponses--;
+
+          if (response.error) {
+            responseMap.set(clientId, { status: 'error', error: response.error, time: responseTime });
+          } else {
+            responseMap.set(clientId, { status: 'success', result: response.result, time: responseTime });
+            
+            // Resolve with the first successful response if we haven't already
+            if (!hasResolved) {
+              hasResolved = true;
+              // Only award points to the owner of the fastest response
+              if (client.owner) {
+                addPendingPoints(client.owner, 10);
+              }
+              resolve({ status: 'success', data: response.result });
+            }
+          }
+
+          // If this was the last pending response, log the final results
+          if (pendingResponses === 0) {
+            console.log('All RPC responses received:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+          }
         }
       });
     });
