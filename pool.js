@@ -396,8 +396,8 @@ async function handleRequestSet(rpcRequest) {
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
-        // If we've already timed out or resolved, ignore the response
-        if (hasReceivedResponse || hasResolved) {
+        // If this specific client has already responded, ignore duplicate responses
+        if (hasReceivedResponse) {
           return;
         }
 
@@ -442,22 +442,25 @@ async function handleRequestSet(rpcRequest) {
             if (client.owner) {
               addPendingPoints(client.owner, 10);
             }
-            console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
             resolve({ status: 'success', data: response.result });
           }
         }
 
-        // If this was the last pending response and we haven't resolved yet, resolve with an error
-        if (pendingResponses === 0 && !hasResolved) {
-          hasResolved = true;
+        // If this was the last pending response, log all responses and resolve if we haven't already
+        if (pendingResponses === 0) {
           console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
-          resolve({ 
-            status: 'error', 
-            data: {
-              code: -32603,
-              message: "All nodes failed to respond successfully"
-            }
-          });
+          
+          if (!hasResolved) {
+            // If we get here and haven't resolved, it means all responses were errors
+            hasResolved = true;
+            resolve({ 
+              status: 'error', 
+              data: {
+                code: -32603,
+                message: "All nodes failed to respond successfully"
+              }
+            });
+          }
         }
       });
     });
