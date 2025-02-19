@@ -199,6 +199,7 @@ const httpsServerInternal = https.createServer({
     req.on('end', async () => {
       try {
         const rpcRequest = JSON.parse(body);
+        console.log("-----------------------------------------------------------------------------------------");
         console.log('Received RPC request:', JSON.stringify(rpcRequest, null, 2));
         
         // Validate RPC request format
