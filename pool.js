@@ -343,7 +343,7 @@ async function handleRequestSet(rpcRequest) {
   // Map to store responses from each client
   const responseMap = new Map();
 
-  // Create a promise that will resolve with the fastest successful response
+  // Create a promise that will resolve with the fastest successful response or error if all timeout
   return new Promise((resolve, reject) => {
     let hasResolved = false;  // Flag to track if we've resolved with a response
     let pendingResponses = selectedClients.socket_ids.length;  // Track remaining responses
@@ -370,15 +370,31 @@ async function handleRequestSet(rpcRequest) {
             client.owner || 'unknown'
           );
 
-          // If this was the last pending response, log the final results
-          if (pendingResponses === 0) {
-            console.log('All RPC responses received:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+          // Remove the message handler for this client
+          socket.removeAllListeners('rpc_request');
+
+          // If all responses have timed out and we haven't resolved yet, resolve with an error
+          if (pendingResponses === 0 && !hasResolved) {
+            hasResolved = true;
+            console.log('All RPC responses timed out:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+            resolve({ 
+              status: 'error', 
+              data: {
+                code: -32603,
+                message: "All nodes timed out"
+              }
+            });
           }
         }
       }, socketTimeout);
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
+        // If we've already timed out or resolved, ignore the response
+        if (hasReceivedResponse || hasResolved) {
+          return;
+        }
+
         // ALWAYS log every response immediately, no conditions
         const responseTime = Date.now() - startTime;
         if (response.error) {
@@ -404,31 +420,37 @@ async function handleRequestSet(rpcRequest) {
         }
 
         // Handle state management only for first response from this client
-        if (!hasReceivedResponse) {
-          hasReceivedResponse = true;
-          clearTimeout(timeoutId);
-          pendingResponses--;
+        hasReceivedResponse = true;
+        clearTimeout(timeoutId);
+        pendingResponses--;
 
-          if (response.error) {
-            responseMap.set(clientId, { status: 'error', error: response.error, time: responseTime });
-          } else {
-            responseMap.set(clientId, { status: 'success', result: response.result, time: responseTime });
-            
-            // Resolve with the first successful response if we haven't already
-            if (!hasResolved) {
-              hasResolved = true;
-              // Only award points to the owner of the fastest response
-              if (client.owner) {
-                addPendingPoints(client.owner, 10);
-              }
-              resolve({ status: 'success', data: response.result });
+        if (response.error) {
+          responseMap.set(clientId, { status: 'error', error: response.error, time: responseTime });
+        } else {
+          responseMap.set(clientId, { status: 'success', result: response.result, time: responseTime });
+          
+          // Resolve with the first successful response if we haven't already
+          if (!hasResolved) {
+            hasResolved = true;
+            // Only award points to the owner of the fastest response
+            if (client.owner) {
+              addPendingPoints(client.owner, 10);
             }
+            resolve({ status: 'success', data: response.result });
           }
+        }
 
-          // If this was the last pending response, log the final results
-          if (pendingResponses === 0) {
-            console.log('All RPC responses received:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
-          }
+        // If this was the last pending response and we haven't resolved yet, resolve with an error
+        if (pendingResponses === 0 && !hasResolved) {
+          hasResolved = true;
+          console.log('All RPC responses received:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+          resolve({ 
+            status: 'error', 
+            data: {
+              code: -32603,
+              message: "All nodes failed to respond successfully"
+            }
+          });
         }
       });
     });
