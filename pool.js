@@ -11,6 +11,7 @@ const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
+const { compareResults } = require('./utils/compareResults');
 const { logNode } = require('./utils/logNode');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout, pointUpdateInterval } = require('./config');
@@ -442,6 +443,9 @@ async function handleRequestSet(rpcRequest) {
         // If this was the last pending response, log all responses and resolve if we haven't already
         if (pendingResponses === 0) {
           console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+
+          const resultsMatch = compareResults(responseMap);
+          console.log('Results match:', resultsMatch);
           
           if (!hasResolved) {
             // If we get here and haven't resolved, it means all responses were errors
