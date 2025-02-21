@@ -1,8 +1,17 @@
-function compareResults(responseMap) {
+function compareResults(responseMap, poolMap) {
+  // Initialize return object
+  const result = {
+    resultsMatch: false,
+    mismatchedNode: 'nan',
+    mismatchedOwner: 'nan',
+    mismatchedResults: []
+  };
+
   // First check if any response has an error status
   for (const [_, response] of responseMap) {
-    if (response.status === 'error') {
-      return "Error response";
+    if (response.status === 'error' || response.status === 'timeout') {
+      result.resultsMatch = false;
+      return result;
     }
   }
 
@@ -12,60 +21,59 @@ function compareResults(responseMap) {
     data: data.result // Extract just the result from the response data
   })).filter(r => r.data !== undefined); // Filter out any undefined results
 
-  // If we don't have enough responses to compare, return null
+  // If we don't have enough responses to compare, return default result
   if (responses.length < 2) {
-    return null;
+    return result;
   }
 
-  // Helper function to deeply compare two values
-  function deepCompare(val1, val2) {
-    // Handle primitive types
-    if (typeof val1 !== 'object' || val1 === null || typeof val2 !== 'object' || val2 === null) {
-      return val1 === val2;
-    }
-
-    // For objects, compare common keys only
-    const keys1 = Object.keys(val1);
-    const keys2 = Object.keys(val2);
-    const commonKeys = keys1.filter(key => keys2.includes(key));
-
-    // Compare all common keys
-    return commonKeys.every(key => deepCompare(val1[key], val2[key]));
-  }
-
-  // Compare each response with others and track matches
-  const matches = new Map();
-
-  for (let i = 0; i < responses.length; i++) {
-    for (let j = i + 1; j < responses.length; j++) {
-      const match = deepCompare(responses[i].data, responses[j].data);
-      
-      if (match) {
-        matches.set(responses[i].clientId, (matches.get(responses[i].clientId) || 0) + 1);
-        matches.set(responses[j].clientId, (matches.get(responses[j].clientId) || 0) + 1);
+  // Find the majority value for each key/path
+  function findMajorityValue(responses) {
+    const valueCounts = new Map();
+    responses.forEach(response => {
+      const value = JSON.stringify(response.data);
+      valueCounts.set(value, (valueCounts.get(value) || 0) + 1);
+    });
+    
+    let majorityValue;
+    let maxCount = 0;
+    
+    for (const [value, count] of valueCounts) {
+      if (count > maxCount) {
+        maxCount = count;
+        majorityValue = value;
       }
     }
+    
+    return { majorityValue, maxCount };
   }
 
-  // Analyze matches
-  if (matches.size === 0) {
-    // All responses disagree
-    return "All responses disagree";
+  // Get the majority value
+  const { majorityValue, maxCount } = findMajorityValue(responses);
+
+  // If there's no clear majority, all values are mismatches
+  if (maxCount <= responses.length / 2) {
+    result.mismatchedNode = 'nan';
+    result.mismatchedOwner = 'nan';
+    result.mismatchedResults = responses.map(r => `result: ${JSON.stringify(r.data)}`);
+    return result;
   }
 
-  // Check if all responses match
-  if (Array.from(matches.values()).every(count => count === responses.length - 1)) {
-    return true;
+  // Find the response that doesn't match the majority
+  const mismatchedResponse = responses.find(r => JSON.stringify(r.data) !== majorityValue);
+  
+  // If we found a mismatched response
+  if (mismatchedResponse) {
+    result.resultsMatch = false;
+    // Get the machine ID and owner from poolMap using the websocket ID
+    const poolMapEntry = poolMap.get(mismatchedResponse.clientId);
+    result.mismatchedNode = poolMapEntry?.id || 'unknown';
+    result.mismatchedOwner = poolMapEntry?.owner || 'unknown';
+    result.mismatchedResults = [`result: ${JSON.stringify(mismatchedResponse.data)}`];
+  } else {
+    result.resultsMatch = true;
   }
 
-  // Find the response that doesn't match (when two match and one differs)
-  const mismatchedClient = responses.find(r => !matches.has(r.clientId) || matches.get(r.clientId) === 0);
-  if (mismatchedClient) {
-    return mismatchedClient.clientId;
-  }
-
-  // Fallback case
-  return null;
+  return result;
 }
 
 module.exports = { compareResults };

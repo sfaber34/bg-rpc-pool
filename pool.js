@@ -12,6 +12,7 @@ const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObje
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
 const { compareResults } = require('./utils/compareResults');
+const { logCompareResults } = require('./utils/logCompareResults');
 const { logNode } = require('./utils/logNode');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout, pointUpdateInterval } = require('./config');
@@ -444,8 +445,13 @@ async function handleRequestSet(rpcRequest) {
         if (pendingResponses === 0) {
           console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
 
-          const resultsMatch = compareResults(responseMap);
+          const { resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults } = compareResults(responseMap, poolMap);
           console.log('Results match:', resultsMatch);
+          console.log('Mismatched node:', mismatchedNode);
+          console.log('Mismatched owner:', mismatchedOwner);
+          console.log('Mismatched results:', mismatchedResults);
+          
+          // logCompareResults(resultsMatch, responseMap);
           
           if (!hasResolved) {
             // If we get here and haven't resolved, it means all responses were errors
