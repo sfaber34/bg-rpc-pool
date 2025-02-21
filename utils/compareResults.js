@@ -7,9 +7,9 @@ function compareResults(responseMap, poolMap) {
     mismatchedResults: []
   };
 
-  // First check if any response has an error status
-  for (const [_, response] of responseMap) {
-    if (response.status === 'error' || response.status === 'timeout') {
+  // First check if any response has an invalid status or timeout
+  for (const [_, data] of responseMap) {
+    if (data.status === 'invalid' || data.status === 'timeout') {
       result.resultsMatch = false;
       return result;
     }
@@ -18,7 +18,9 @@ function compareResults(responseMap, poolMap) {
   // Convert responseMap to array of responses
   const responses = Array.from(responseMap.entries()).map(([clientId, data]) => ({
     clientId,
-    data: data.result // Extract just the result from the response data
+    data: data.status === 'success' ? data.response?.result : 
+          data.status === 'error' ? data.response?.error : 
+          undefined
   })).filter(r => r.data !== undefined); // Filter out any undefined results
 
   // If we don't have enough responses to compare, return default result

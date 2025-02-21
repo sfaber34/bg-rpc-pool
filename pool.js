@@ -425,10 +425,31 @@ async function handleRequestSet(rpcRequest) {
         clearTimeout(timeoutId);
         pendingResponses--;
 
-        if (response.error) {
-          responseMap.set(clientId, { status: 'error', error: response.error, time: responseTime });
-        } else {
-          responseMap.set(clientId, { status: 'success', result: response.result, time: responseTime });
+        // Validate response format
+        if (!response || typeof response !== 'object' || response.jsonrpc !== '2.0') {
+          console.error(`Invalid JSON-RPC response format from node ${client.id}:`, response);
+          responseMap.set(clientId, { status: 'invalid', time: responseTime });
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            responseTime,
+            'invalid_format',
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
+        } else if (response.error) {
+          responseMap.set(clientId, { 
+            status: 'error',
+            response: response,  // Store complete response
+            time: responseTime 
+          });
+        } else if (response.result !== undefined) {
+          responseMap.set(clientId, { 
+            status: 'success',
+            response: response,  // Store complete response
+            time: responseTime 
+          });
           
           // Resolve with the first successful response if we haven't already
           if (!hasResolved) {
@@ -439,6 +460,20 @@ async function handleRequestSet(rpcRequest) {
             }
             resolve({ status: 'success', data: response.result });
           }
+        } else {
+          // Handle case where response is valid JSON-RPC but missing both error and result
+          console.error(`Invalid JSON-RPC response from node ${client.id}: neither error nor result present:`, response);
+          console.log('response:', response);
+          responseMap.set(clientId, { status: 'invalid', time: responseTime });
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            responseTime,
+            'invalid_response',
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
         }
 
         // If this was the last pending response, log all responses and resolve if we haven't already

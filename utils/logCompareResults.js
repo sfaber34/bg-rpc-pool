@@ -14,10 +14,24 @@ function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismat
     const nodeResults = Array.from(responseMap.entries()).map(([wsId, data]) => {
         const client = poolMap.get(wsId);
         const machineId = client?.id || 'unknown';
+        let result;
+        
+        if (data.status === 'timeout') {
+            result = 'timeout';
+        } else if (data.status === 'invalid') {
+            result = 'invalid';
+        } else if (data.status === 'error') {
+            result = data.response?.error ? JSON.stringify(data.response.error).replace(/\|/g, ',') : 'unknown_error';
+        } else if (data.status === 'success' && data.response?.result !== undefined) {
+            result = JSON.stringify(data.response.result).replace(/\|/g, ',');
+        } else {
+            result = 'unknown';
+        }
+
         return {
             wsId,
             machineId,
-            result: data.result ? JSON.stringify(data.result).replace(/\|/g, ',') : (data.error ? JSON.stringify(data.error).replace(/\|/g, ',') : 'timeout')
+            result
         };
     });
 
