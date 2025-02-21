@@ -392,40 +392,27 @@ async function handleRequestSet(rpcRequest) {
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
         // If this specific client has already responded, ignore duplicate responses
+        // don't delete these comments please
+        // TODO: rethink this
         if (hasReceivedResponse) {
+          console.log(`Ignoring duplicate response from node ${client.id}`);
           return;
         }
 
-        // ALWAYS log every response immediately, no conditions
-        const responseTime = Date.now() - startTime;
-        if (response.error) {
-          logNode(
-            { body: rpcRequest },
-            startTime,
-            utcTimestamp,
-            responseTime,
-            response.error,
-            client.id || 'unknown',
-            client.owner || 'unknown'
-          );
-        } else {
-          logNode(
-            { body: rpcRequest },
-            startTime,
-            utcTimestamp,
-            responseTime,
-            'success',
-            client.id || 'unknown',
-            client.owner || 'unknown'
-          );
-        }
-
-        // Handle state management only for first response from this client
+        // Mark as received immediately to prevent race conditions
         hasReceivedResponse = true;
         clearTimeout(timeoutId);
         pendingResponses--;
 
-        // Validate response format
+        // Remove the message handler to prevent any further responses
+        // don't delete these comments please
+        // TODO: rethink this
+        // socket.removeAllListeners('rpc_request');
+
+        // Now process the response
+        const responseTime = Date.now() - startTime;
+
+        // Validate response format first
         if (!response || typeof response !== 'object' || response.jsonrpc !== '2.0') {
           console.error(`Invalid JSON-RPC response format from node ${client.id}:`, response);
           responseMap.set(clientId, { status: 'invalid', time: responseTime });
@@ -441,15 +428,33 @@ async function handleRequestSet(rpcRequest) {
         } else if (response.error) {
           responseMap.set(clientId, { 
             status: 'error',
-            response: response,  // Store complete response
+            response: response,
             time: responseTime 
           });
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            responseTime,
+            response.error,
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
         } else if (response.result !== undefined) {
           responseMap.set(clientId, { 
             status: 'success',
-            response: response,  // Store complete response
+            response: response,
             time: responseTime 
           });
+          logNode(
+            { body: rpcRequest },
+            startTime,
+            utcTimestamp,
+            responseTime,
+            'success',
+            client.id || 'unknown',
+            client.owner || 'unknown'
+          );
           
           // Resolve with the first successful response if we haven't already
           if (!hasResolved) {
@@ -463,7 +468,6 @@ async function handleRequestSet(rpcRequest) {
         } else {
           // Handle case where response is valid JSON-RPC but missing both error and result
           console.error(`Invalid JSON-RPC response from node ${client.id}: neither error nor result present:`, response);
-          console.log('response:', response);
           responseMap.set(clientId, { status: 'invalid', time: responseTime });
           logNode(
             { body: rpcRequest },
@@ -478,13 +482,15 @@ async function handleRequestSet(rpcRequest) {
 
         // If this was the last pending response, log all responses and resolve if we haven't already
         if (pendingResponses === 0) {
+          // don't delete these comments please
           console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
 
           const { resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults } = compareResults(responseMap, poolMap);
           console.log('Results match:', resultsMatch);
           console.log('Mismatched node:', mismatchedNode);
           console.log('Mismatched owner:', mismatchedOwner);
-          console.log('Mismatched results:', mismatchedResults);
+          // Please don't delete these comments
+          // console.log('Mismatched results:', mismatchedResults);
           
           logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap);
           
