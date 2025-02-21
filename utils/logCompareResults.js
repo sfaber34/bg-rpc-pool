@@ -1,5 +1,53 @@
-function logCompareResults(resultsMatch, responseMap) {
+const fs = require('fs');
 
+const { compareResultsLogPath } = require('../config');
+
+function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap) {
+    // Get current timestamp in UTC
+    const now = new Date();
+    const dateTime = now.toISOString()
+        .replace('T', ' ')      // Replace T with space
+        .replace(/\.\d+Z$/, ''); // Remove milliseconds and Z
+    const epochMs = now.getTime();
+
+    // Extract results for each node from responseMap, using machine IDs from poolMap
+    const nodeResults = Array.from(responseMap.entries()).map(([wsId, data]) => {
+        const client = poolMap.get(wsId);
+        const machineId = client?.id || 'unknown';
+        return {
+            wsId,
+            machineId,
+            result: data.result ? JSON.stringify(data.result).replace(/\|/g, ',') : (data.error ? JSON.stringify(data.error).replace(/\|/g, ',') : 'timeout')
+        };
+    });
+
+    // Ensure we have exactly 3 results, pad with empty values if needed
+    while (nodeResults.length < 3) {
+        nodeResults.push({ wsId: 'none', machineId: 'none', result: 'none' });
+    }
+
+    // Format the log line
+    const logLine = [
+        dateTime,
+        epochMs,
+        resultsMatch,
+        mismatchedNode,
+        mismatchedOwner,
+        mismatchedResults ? JSON.stringify(mismatchedResults).replace(/\|/g, ',') : 'none',
+        nodeResults[0].machineId,
+        nodeResults[0].result,
+        nodeResults[1].machineId,
+        nodeResults[1].result,
+        nodeResults[2].machineId,
+        nodeResults[2].result
+    ].join('|') + '\n';
+
+    // Write to log file
+    fs.appendFile(compareResultsLogPath, logLine, (err) => {
+        if (err) {
+            console.error('Error writing to compare results log file:', err);
+        }
+    });
 }
 
 module.exports = { logCompareResults };

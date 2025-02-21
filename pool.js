@@ -451,7 +451,7 @@ async function handleRequestSet(rpcRequest) {
           console.log('Mismatched owner:', mismatchedOwner);
           console.log('Mismatched results:', mismatchedResults);
           
-          // logCompareResults(resultsMatch, responseMap);
+          logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap);
           
           if (!hasResolved) {
             // If we get here and haven't resolved, it means all responses were errors
