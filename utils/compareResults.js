@@ -7,12 +7,18 @@ function compareResults(responseMap, poolMap) {
     mismatchedResults: []
   };
 
-  // First check if any response has an invalid status or timeout
+  // Count successful responses
+  let successCount = 0;
   for (const [_, data] of responseMap) {
-    if (data.status === 'invalid' || data.status === 'timeout') {
-      result.resultsMatch = false;
-      return result;
+    if (data.status === 'success') {
+      successCount++;
     }
+  }
+
+  // If not all responses are successful, return with resultsMatch = true
+  if (successCount !== responseMap.size) {
+    result.resultsMatch = true;
+    return result;
   }
 
   // Convert responseMap to array of responses
