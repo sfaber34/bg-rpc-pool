@@ -28,8 +28,11 @@ function compareResults(responseMap, poolMap) {
     return result;
   }
 
-  // Find the majority value for each key/path
-  function findMajorityValue(responses) {
+  // Check if responses are objects or simple values
+  const isObjectResponse = responses.some(r => typeof r.data === 'object' && r.data !== null);
+
+  if (!isObjectResponse) {
+    // Handle simple value comparison (original logic)
     const valueCounts = new Map();
     responses.forEach(response => {
       const value = JSON.stringify(response.data);
@@ -45,32 +48,85 @@ function compareResults(responseMap, poolMap) {
         majorityValue = value;
       }
     }
-    
-    return { majorityValue, maxCount };
-  }
 
-  // Get the majority value
-  const { majorityValue, maxCount } = findMajorityValue(responses);
+    if (maxCount <= responses.length / 2) {
+      result.mismatchedNode = 'nan';
+      result.mismatchedOwner = 'nan';
+      result.mismatchedResults = responses.map(r => `result: ${JSON.stringify(r.data)}`);
+      return result;
+    }
 
-  // If there's no clear majority, all values are mismatches
-  if (maxCount <= responses.length / 2) {
-    result.mismatchedNode = 'nan';
-    result.mismatchedOwner = 'nan';
-    result.mismatchedResults = responses.map(r => `result: ${JSON.stringify(r.data)}`);
+    const mismatchedResponse = responses.find(r => JSON.stringify(r.data) !== majorityValue);
+    if (mismatchedResponse) {
+      result.resultsMatch = false;
+      const poolMapEntry = poolMap.get(mismatchedResponse.clientId);
+      result.mismatchedNode = poolMapEntry?.id || 'unknown';
+      result.mismatchedOwner = poolMapEntry?.owner || 'unknown';
+      result.mismatchedResults = [`result: ${JSON.stringify(mismatchedResponse.data)}`];
+    } else {
+      result.resultsMatch = true;
+    }
     return result;
   }
 
-  // Find the response that doesn't match the majority
-  const mismatchedResponse = responses.find(r => JSON.stringify(r.data) !== majorityValue);
+  // Handle object comparison
+  // Find common keys across all responses
+  const commonKeys = new Set();
+  let firstIteration = true;
+
+  responses.forEach(response => {
+    if (!response.data || typeof response.data !== 'object') return;
+    
+    const currentKeys = new Set(Object.keys(response.data));
+    
+    if (firstIteration) {
+      currentKeys.forEach(key => commonKeys.add(key));
+      firstIteration = false;
+    } else {
+      // Keep only keys that exist in all responses
+      for (const key of commonKeys) {
+        if (!currentKeys.has(key)) {
+          commonKeys.delete(key);
+        }
+      }
+    }
+  });
+
+  // Compare each key across all responses
+  const keyMismatches = new Map(); // key -> Set of unique values
   
-  // If we found a mismatched response
-  if (mismatchedResponse) {
+  for (const key of commonKeys) {
+    const keyValues = new Set();
+    responses.forEach(response => {
+      keyValues.add(JSON.stringify(response.data[key]));
+    });
+    
+    if (keyValues.size > 1) {
+      keyMismatches.set(key, keyValues);
+    }
+  }
+
+  if (keyMismatches.size > 0) {
     result.resultsMatch = false;
-    // Get the machine ID and owner from poolMap using the websocket ID
-    const poolMapEntry = poolMap.get(mismatchedResponse.clientId);
-    result.mismatchedNode = poolMapEntry?.id || 'unknown';
-    result.mismatchedOwner = poolMapEntry?.owner || 'unknown';
-    result.mismatchedResults = [`result: ${JSON.stringify(mismatchedResponse.data)}`];
+    // Find the first response that differs for any mismatched key
+    for (const [key, values] of keyMismatches) {
+      const majorityValue = Array.from(values)
+        .map(v => ({ value: v, count: responses.filter(r => JSON.stringify(r.data[key]) === v).length }))
+        .sort((a, b) => b.count - a.count)[0].value;
+      
+      const mismatchedResponse = responses.find(r => JSON.stringify(r.data[key]) !== majorityValue);
+      if (mismatchedResponse) {
+        const poolMapEntry = poolMap.get(mismatchedResponse.clientId);
+        result.mismatchedNode = poolMapEntry?.id || 'unknown';
+        result.mismatchedOwner = poolMapEntry?.owner || 'unknown';
+        break;
+      }
+    }
+    
+    // Format mismatched results to show key-specific differences
+    result.mismatchedResults = Array.from(keyMismatches.entries()).map(([key, values]) => 
+      `key "${key}": ${Array.from(values).join(' vs ')}`
+    );
   } else {
     result.resultsMatch = true;
   }
