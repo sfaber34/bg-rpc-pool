@@ -279,7 +279,10 @@ function selectRandomClients(nClients) {
   
   if (clients.length === 0) {
     console.log('No clients connected to the pool');
-    return { error: "No clients connected to the pool" };
+    return { 
+      code: -69000,
+      error: "No clients connected to the pool" 
+    };
   }
 
   // Find the highest block number
@@ -288,7 +291,10 @@ function selectRandomClients(nClients) {
   
   if (clientsWithBlocks.length === 0) {
     console.log('No clients have reported their block number yet');
-    return { error: "No clients have reported their block number yet" };
+    return { 
+      code: -69001,
+      error: "No clients have reported their block number yet"
+    };
   }
 
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
@@ -303,6 +309,7 @@ function selectRandomClients(nClients) {
   if (highestBlockClients.length < nClients) {
     console.error(`Not enough clients at highest block. Requested: ${nClients}, Available: ${highestBlockClients.length}`);
     return {
+      code: -69002,
       error: `Not enough clients at highest block ${highestBlock}. Requested: ${nClients}, Available: ${highestBlockClients.length}`
     };
   }
@@ -335,7 +342,7 @@ async function handleRequestSet(rpcRequest) {
     return { 
       status: 'error', 
       data: {
-        code: -32603,
+        code: selectedClients.code,
         message: selectedClients.error
       }
     };
@@ -500,7 +507,7 @@ async function handleRequestSet(rpcRequest) {
             resolve({ 
               status: 'error', 
               data: {
-                code: -32603,
+                code: -69003,
                 message: "All nodes failed to respond successfully"
               }
             });
