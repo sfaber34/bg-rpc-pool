@@ -194,7 +194,7 @@ const httpsServerInternal = https.createServer({
       try {
         const rpcRequest = JSON.parse(body);
         console.log("-----------------------------------------------------------------------------------------");
-        console.log('Received RPC request:', JSON.stringify(rpcRequest, null, 2));
+        console.log('❔Received RPC request:', JSON.stringify(rpcRequest, null, 2));
         
         // Validate RPC request format
         if (!rpcRequest.jsonrpc || rpcRequest.jsonrpc !== "2.0" || !rpcRequest.method || rpcRequest.id === undefined) {
@@ -278,7 +278,7 @@ function selectRandomClients(nClients) {
   console.log(`Total connected clients: ${clients.length}`);
   
   if (clients.length === 0) {
-    console.log('No clients connected to the pool');
+    console.error('No clients connected to the pool');
     return { 
       code: -69000,
       error: "No clients connected to the pool" 
@@ -290,7 +290,7 @@ function selectRandomClients(nClients) {
   console.log(`Clients with block numbers: ${clientsWithBlocks.length}`);
   
   if (clientsWithBlocks.length === 0) {
-    console.log('No clients have reported their block number yet');
+    console.error('No clients have reported their block number yet');
     return { 
       code: -69001,
       error: "No clients have reported their block number yet"
@@ -384,7 +384,7 @@ async function handleRequestSet(rpcRequest) {
           // If all responses have timed out and we haven't resolved yet, resolve with an error
           if (pendingResponses === 0 && !hasResolved) {
             hasResolved = true;
-            console.log('All RPC responses timed out:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+            console.error('All RPC responses timed out:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
             resolve({ 
               status: 'error', 
               data: {
@@ -402,7 +402,7 @@ async function handleRequestSet(rpcRequest) {
         // don't delete these comments please
         // TODO: rethink this
         if (hasReceivedResponse) {
-          console.log(`Ignoring duplicate response from node ${client.id}`);
+          console.error(`Ignoring duplicate response from node ${client.id}`);
           return;
         }
 
@@ -490,7 +490,8 @@ async function handleRequestSet(rpcRequest) {
         // If this was the last pending response, log all responses and resolve if we haven't already
         if (pendingResponses === 0) {
           // don't delete these comments please
-          console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+          // console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+          console.log('👍 All responses received');
 
           const { resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults } = compareResults(responseMap, poolMap);
           console.log('Results match:', resultsMatch);
