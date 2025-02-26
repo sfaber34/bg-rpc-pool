@@ -110,10 +110,13 @@ const io = new Server(wsServer, {
 
 // Create HTTP server for the API endpoint (no SSL)
 const httpServerInternal = require('http').createServer(async (req, res) => {  
-  // Add CORS headers
+  // Add CORS headers and security headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET');
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
   
   if (req.url === '/poolNodes' && req.method === 'GET') {
     try {      
