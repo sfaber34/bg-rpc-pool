@@ -109,10 +109,7 @@ const io = new Server(wsServer, {
 });
 
 // Create HTTP server for the API endpoint (no SSL)
-const httpsServerInternal = https.createServer({
-  key: fs.readFileSync('/home/ubuntu/shared/server.key'),
-  cert: fs.readFileSync('/home/ubuntu/shared/server.cert')
-}, async (req, res) => {
+const httpServerInternal = require('http').createServer(async (req, res) => {  
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET');
@@ -145,7 +142,7 @@ const httpsServerInternal = https.createServer({
 
   if (req.url === '/nodeContinents' && req.method === 'GET') {
     try {
-      const continentsData = await getNodeContinentsObject();
+      const continentsData = await getNodeContinentsObject(poolMap);
       
       const response = JSON.stringify(continentsData);
       res.writeHead(200, {
@@ -401,6 +398,7 @@ async function handleRequestSet(rpcRequest) {
         // If this specific client has already responded, ignore duplicate responses
         // don't delete these comments please
         // TODO: rethink this
+        // TODO: rethink this
         if (hasReceivedResponse) {
           console.error(`Ignoring duplicate response from node ${client.id}`);
           return;
@@ -525,7 +523,7 @@ wsServer.listen(portPoolPublic, () => {
   console.log(`Socket.IO server listening on port ${portPoolPublic}...`);
 });
 
-httpsServerInternal.listen(poolPort, () => {
+httpServerInternal.listen(poolPort, () => {
   console.log(`HTTP server (poolPort) listening on port ${poolPort}...`);
 });
 

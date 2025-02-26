@@ -18,13 +18,24 @@ const nodeContinents = {
     }
 };
 
-async function getNodeContinentsObject() {
-    return nodeContinents;
+async function getNodeContinentsObject(poolMap) {
+    try {
+        await constructNodeContinentsObject(poolMap);
+        return nodeContinents;
+    } catch (error) {
+        console.error('Error in getNodeContinentsObject:', error);
+        return nodeContinents; // Return default state if there's an error
+    }
 }
 
 async function constructNodeContinentsObject(poolMap) {
     let dbPool;
     try {
+        if (!poolMap) {
+            console.error('poolMap is undefined or null');
+            return;
+        }
+
         if (!process.env.RDS_SECRET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.DB_HOST) {
             console.error('Required environment variables are missing. Please check your .env file.');
             console.error('Required: RDS_SECRET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DB_HOST');
