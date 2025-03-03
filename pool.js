@@ -1,7 +1,6 @@
 const { Server } = require('socket.io');
 const https = require('https');
 const fs = require('fs');
-const crypto = require('crypto');
 
 const { incrementOwnerPoints } = require('./database_scripts/incrementOwnerPoints');
 const { updateLocationTable } = require('./database_scripts/updateLocationTable');
@@ -269,13 +268,6 @@ const httpServerInternal = require('https').createServer(
     }));
   }
 });
-
-function generateMessageId(message, clientIp) {
-  const hash = crypto.createHash('sha256');
-  const timestamp = Date.now();
-  hash.update(JSON.stringify(message) + clientIp + timestamp);
-  return hash.digest('hex');
-}
 
 function selectRandomClients(nClients) {
   // Get all clients and their block numbers
