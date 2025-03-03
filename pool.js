@@ -109,7 +109,12 @@ const io = new Server(wsServer, {
 });
 
 // Create HTTP server for the API endpoint (no SSL)
-const httpServerInternal = require('http').createServer(async (req, res) => {  
+const httpServerInternal = require('https').createServer(
+  {
+    key: fs.readFileSync('/home/ubuntu/shared/server.key'),
+    cert: fs.readFileSync('/home/ubuntu/shared/server.cert'),
+  },
+  async (req, res) => {  
   // Add CORS headers and security headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, GET');
