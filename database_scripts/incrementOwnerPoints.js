@@ -1,9 +1,13 @@
 const { Pool } = require('pg');
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const path = require('path');
+const fs = require('fs');
 
 // Load .env from the project root directory
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+// Path to the RDS CA bundle
+const RDS_CA_BUNDLE_PATH = '/home/ubuntu/shared/rds-ca-bundle.pem';
 
 async function incrementOwnerPoints(owner, points) {
   try {
@@ -37,7 +41,8 @@ async function incrementOwnerPoints(owner, points) {
       database: secret.dbname || 'postgres',
       port: 5432,
       ssl: {
-        rejectUnauthorized: false
+        rejectUnauthorized: true,
+        ca: fs.readFileSync(RDS_CA_BUNDLE_PATH).toString()
       }
     };
 

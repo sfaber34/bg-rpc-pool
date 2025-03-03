@@ -1,15 +1,26 @@
 const { Pool } = require('pg');
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const path = require('path');
+const fs = require('fs');
 
 // Load .env from the project root directory
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+// Path to the RDS CA bundle
+const RDS_CA_BUNDLE_PATH = '/home/ubuntu/shared/rds-ca-bundle.pem';
 
 async function getOwnerPoints(owner) {
   try {
     if (!process.env.RDS_SECRET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.DB_HOST) {
       console.error('Required environment variables are missing. Please check your .env file.');
       console.error('Required: RDS_SECRET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DB_HOST');
+      return 0;
+    }
+
+    // Check if RDS CA bundle exists
+    if (!fs.existsSync(RDS_CA_BUNDLE_PATH)) {
+      console.error('RDS CA bundle not found at:', RDS_CA_BUNDLE_PATH);
+      console.error('Please download the bundle from: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem');
       return 0;
     }
 
@@ -36,7 +47,8 @@ async function getOwnerPoints(owner) {
       database: secret.dbname || 'postgres',
       port: 5432,
       ssl: {
-        rejectUnauthorized: false
+        rejectUnauthorized: true,
+        ca: fs.readFileSync(RDS_CA_BUNDLE_PATH).toString()
       }
     };
 

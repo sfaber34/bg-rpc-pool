@@ -2,9 +2,13 @@ const { Pool } = require('pg');
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const path = require('path');
 const axios = require('axios');
+const fs = require('fs');
 
 // Load .env from the project root directory
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+// Path to the RDS CA bundle
+const RDS_CA_BUNDLE_PATH = '/home/ubuntu/shared/rds-ca-bundle.pem';
 
 async function updateLocationTable(enode) {
   let pool;
@@ -39,13 +43,19 @@ async function updateLocationTable(enode) {
     const data = await secretsClient.send(command);
     const secret = JSON.parse(data.SecretString);
 
-    pool = new Pool({
-      user: secret.username,
+    const dbConfig = {
       host: process.env.DB_HOST,
-      database: secret.dbname,
+      user: secret.username,
       password: secret.password,
-      port: secret.port,
-    });
+      database: secret.dbname || 'postgres',
+      port: 5432,
+      ssl: {
+        rejectUnauthorized: true,
+        ca: fs.readFileSync(RDS_CA_BUNDLE_PATH).toString()
+      }
+    };
+
+    pool = new Pool(dbConfig);
 
     // Check if IP already exists in the table
     const existingRecord = await pool.query('SELECT ip FROM location WHERE ip = $1', [ip]);

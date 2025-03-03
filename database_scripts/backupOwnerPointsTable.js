@@ -6,6 +6,9 @@ const path = require('path');
 // Load .env from the project root directory
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+// Path to the RDS CA bundle
+const RDS_CA_BUNDLE_PATH = '/home/ubuntu/shared/rds-ca-bundle.pem';
+
 async function backupOwnerPointsTable() {
   console.log("Backing up owner_points table...");
 
@@ -42,7 +45,8 @@ async function backupOwnerPointsTable() {
       database: secret.dbname || 'postgres',
       port: 5432,
       ssl: {
-        rejectUnauthorized: false
+        rejectUnauthorized: true,
+        ca: fs.readFileSync(RDS_CA_BUNDLE_PATH).toString()
       }
     };
 
