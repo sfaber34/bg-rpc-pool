@@ -2,7 +2,7 @@ const fs = require('fs');
 
 const { compareResultsLogPath } = require('../config');
 
-function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap) {
+function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap, method, params) {
     // Get current timestamp in UTC
     const now = new Date();
     const dateTime = now.toISOString()
@@ -53,7 +53,9 @@ function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismat
         nodeResults[1].machineId,
         nodeResults[1].result,
         nodeResults[2].machineId,
-        nodeResults[2].result
+        nodeResults[2].result,
+        method || 'unknown',
+        params ? JSON.stringify(params).replace(/\|/g, ',') : 'none'
     ].join('|') + '\n';
 
     // Write to log file
