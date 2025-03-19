@@ -3,14 +3,14 @@
  * @param {Object} rpcRequest - The JSON-RPC request object
  * @param {Map} poolMap - Map containing all connected clients 
  * @param {Object} io - Socket.IO instance
- * @param {Function} logNode - Function to log node activity
  * @param {Function} addPendingPoints - Function to add points to pending queue
  * @param {number} socketTimeout - Timeout value for socket operations
  * @returns {Promise<Object>} - Promise resolving to the result of the RPC request
  */
 const { selectRandomClients } = require('./selectRandomClients');
+const { logNode } = require('./logNode');
 
-async function handleRequestSingle(rpcRequest, poolMap, io, logNode, addPendingPoints, socketTimeout) {
+async function handleRequestSingle(rpcRequest, poolMap, io, addPendingPoints, socketTimeout) {
   const startTime = Date.now();
   const utcTimestamp = new Date().toISOString();
 

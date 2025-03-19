@@ -10,10 +10,6 @@ const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
-const { compareResults } = require('./utils/compareResults');
-const { logCompareResults } = require('./utils/logCompareResults');
-const { logNode } = require('./utils/logNode');
-const { selectRandomClients } = require('./utils/selectRandomClients');
 const { countCurrentClients } = require('./utils/countCurrentClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
@@ -224,8 +220,8 @@ const httpServerInternal = require('https').createServer(
           console.log(`Current clients: ${currentClients}`);
           
           // don't delete these comments please
-          // const result = await handleRequestSingle(rpcRequest, poolMap, io, logNode, addPendingPoints, socketTimeout);
-          const result = await handleRequestSet(rpcRequest, poolMap, io, logNode, addPendingPoints, compareResults, logCompareResults, socketTimeout);
+          const result = await handleRequestSet(rpcRequest, poolMap, io, addPendingPoints, socketTimeout);
+          // const result = await handleRequestSingle(rpcRequest, poolMap, io, addPendingPoints, socketTimeout);
           if (result.status === 'success') {
             res.statusCode = 200;
             res.end(JSON.stringify({
