@@ -395,10 +395,7 @@ async function handleRequestSet(rpcRequest) {
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
-        // If this specific client has already responded, ignore duplicate responses
-        // don't delete these comments please
-        // TODO: rethink this
-        // TODO: rethink this
+
         if (hasReceivedResponse) {
           console.error(`Ignoring duplicate response from node ${client.id}`);
           return;
@@ -408,11 +405,6 @@ async function handleRequestSet(rpcRequest) {
         hasReceivedResponse = true;
         clearTimeout(timeoutId);
         pendingResponses--;
-
-        // Remove the message handler to prevent any further responses
-        // don't delete these comments please
-        // TODO: rethink this
-        // socket.removeAllListeners('rpc_request');
 
         // Now process the response
         const responseTime = Date.now() - startTime;
