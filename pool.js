@@ -13,7 +13,7 @@ const { countCurrentClients } = require('./utils/countCurrentClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance } = require('./config');
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
@@ -196,6 +196,7 @@ const httpServerInternal = require('https').createServer(
           console.log(`Current clients: ${currentClients}`);
 
           if (currentClients === 0) {
+            console.log("No clients connected to pool");
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
               jsonrpc: "2.0",
@@ -209,7 +210,15 @@ const httpServerInternal = require('https').createServer(
           } else if (currentClients < 3) {
             result = await handleRequestSingle(rpcRequest, poolMap, io);
           } else {
-            result = await handleRequestSet(rpcRequest, poolMap, io);
+            const useSetHandler = Math.floor(Math.random() * requestSetChance) === 0;
+            
+            if (useSetHandler) {
+              console.log(`Randomly selected handleRequestSet (1/${requestSetChance} probability)`);
+              result = await handleRequestSet(rpcRequest, poolMap, io);
+            } else {
+              console.log(`Randomly selected handleRequestSingle (${requestSetChance-1}/${requestSetChance} probability)`);
+              result = await handleRequestSingle(rpcRequest, poolMap, io);
+            }
           }
           
           if (result.status === 'success') {
