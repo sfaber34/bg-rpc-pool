@@ -190,12 +190,28 @@ const httpServerInternal = require('https').createServer(
         }
 
         try {
+          let result;
+
           const currentClients = countCurrentClients(poolMap);
           console.log(`Current clients: ${currentClients}`);
+
+          if (currentClients === 0) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: "2.0",
+              error: {
+                code: -69000,
+                message: "No clients connected to pool"
+              },
+              id: rpcRequest.id
+            }));
+            return;
+          } else if (currentClients < 3) {
+            result = await handleRequestSingle(rpcRequest, poolMap, io);
+          } else {
+            result = await handleRequestSet(rpcRequest, poolMap, io);
+          }
           
-          // don't delete these comments please
-          // const result = await handleRequestSet(rpcRequest, poolMap, io);
-          const result = await handleRequestSingle(rpcRequest, poolMap, io);
           if (result.status === 'success') {
             res.statusCode = 200;
             res.end(JSON.stringify({
