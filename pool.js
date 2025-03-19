@@ -199,6 +199,9 @@ const httpServerInternal = require('https').createServer(
         const rpcRequest = JSON.parse(body);
         console.log("-----------------------------------------------------------------------------------------");
         console.log('❔Received RPC request:', JSON.stringify(rpcRequest, null, 2));
+
+        const currentClients = countCurrentClients();
+        console.log(`Current clients: ${currentClients}`);
         
         // Validate RPC request format
         if (!rpcRequest.jsonrpc || rpcRequest.jsonrpc !== "2.0" || !rpcRequest.method || rpcRequest.id === undefined) {
@@ -268,6 +271,31 @@ const httpServerInternal = require('https').createServer(
     }));
   }
 });
+
+function countCurrentClients() {
+  // Early return if no clients
+  if (poolMap.size === 0) {
+    return 0;
+  }
+
+  const clients = Array.from(poolMap.values());
+  
+  // Get only clients that have reported a block number
+  const clientsWithBlocks = clients.filter(client => client.block_number !== undefined);
+  if (clientsWithBlocks.length === 0) {
+    return 0;
+  }
+
+  // Find the highest block number
+  const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
+  
+  // Count clients at the highest block
+  const highestBlockClients = clients.filter(
+    client => parseInt(client.block_number) === highestBlock
+  );
+  
+  return highestBlockClients.length;
+}
 
 function selectRandomClients(nClients) {
   // Get all clients and their block numbers
