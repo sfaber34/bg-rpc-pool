@@ -59,7 +59,7 @@ async function handleRequestSingle(rpcRequest, poolMap, io) {
         resolve({ 
           status: 'error', 
           data: {
-            code: -32603,
+            code: -69005,
             message: "Node timed out"
           }
         });
