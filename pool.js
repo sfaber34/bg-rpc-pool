@@ -2,7 +2,6 @@ const { Server } = require('socket.io');
 const https = require('https');
 const fs = require('fs');
 
-const { incrementOwnerPoints } = require('./database_scripts/incrementOwnerPoints');
 const { updateLocationTable } = require('./database_scripts/updateLocationTable');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
 const { getEnodesObject } = require('./utils/getEnodesObject');
@@ -14,35 +13,10 @@ const { countCurrentClients } = require('./utils/countCurrentClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout, pointUpdateInterval } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
-
-// Object to track pending points for each owner
-const pendingOwnerPoints = {};
-
-// Process pending points every 10 seconds
-setInterval(async () => {
-  for (const [owner, points] of Object.entries(pendingOwnerPoints)) {
-    if (points > 0) {
-      try {
-        await incrementOwnerPoints(owner, points);
-        // Reset points after successful processing
-        delete pendingOwnerPoints[owner];
-      } catch (err) {
-        console.error(`Failed to process pending points for owner ${owner}:`, err);
-      }
-    }
-  }
-}, pointUpdateInterval);
-
-// Function to add points to pending queue
-function addPendingPoints(owner, pointsToAdd) {
-  if (!owner) return;
-  pendingOwnerPoints[owner] = (pendingOwnerPoints[owner] || 0) + pointsToAdd;
-  console.log(`Added ${pointsToAdd} pending points for owner: ${owner}. Total pending: ${pendingOwnerPoints[owner]}`);
-}
 
 // SSL configuration for Socket.IO server
 const wsServer = https.createServer({
@@ -220,8 +194,8 @@ const httpServerInternal = require('https').createServer(
           console.log(`Current clients: ${currentClients}`);
           
           // don't delete these comments please
-          const result = await handleRequestSet(rpcRequest, poolMap, io, addPendingPoints, socketTimeout);
-          // const result = await handleRequestSingle(rpcRequest, poolMap, io, addPendingPoints, socketTimeout);
+          const result = await handleRequestSet(rpcRequest, poolMap, io, socketTimeout);
+          // const result = await handleRequestSingle(rpcRequest, poolMap, io, socketTimeout);
           if (result.status === 'success') {
             res.statusCode = 200;
             res.end(JSON.stringify({
