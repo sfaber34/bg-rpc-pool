@@ -1,7 +1,8 @@
 function selectRandomClients(poolMap, nClients) {
   // Get all clients and their block numbers
   const clients = Array.from(poolMap.values());
-  console.log(`Total connected clients: ${clients.length}`);
+  // don't delete this comment
+  // console.log(`Total connected clients: ${clients.length}`);
   
   if (clients.length === 0) {
     console.error('No clients connected to the pool');
@@ -13,7 +14,8 @@ function selectRandomClients(poolMap, nClients) {
 
   // Find the highest block number
   const clientsWithBlocks = clients.filter(client => client.block_number !== undefined);
-  console.log(`Clients with block numbers: ${clientsWithBlocks.length}`);
+  // don't delete this comment
+  // console.log(`Clients with block numbers: ${clientsWithBlocks.length}`);
   
   if (clientsWithBlocks.length === 0) {
     console.error('No clients have reported their block number yet');
@@ -24,7 +26,8 @@ function selectRandomClients(poolMap, nClients) {
   }
 
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
-  console.log(`Highest block number: ${highestBlock}`);
+  // don't delete this comment
+  // console.log(`Highest block number: ${highestBlock}`);
 
   // Filter clients at the highest block
   const highestBlockClients = clients.filter(
