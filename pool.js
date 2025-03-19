@@ -13,7 +13,7 @@ const { countCurrentClients } = require('./utils/countCurrentClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, socketTimeout } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval } = require('./config');
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
@@ -194,8 +194,8 @@ const httpServerInternal = require('https').createServer(
           console.log(`Current clients: ${currentClients}`);
           
           // don't delete these comments please
-          const result = await handleRequestSet(rpcRequest, poolMap, io, socketTimeout);
-          // const result = await handleRequestSingle(rpcRequest, poolMap, io, socketTimeout);
+          // const result = await handleRequestSet(rpcRequest, poolMap, io);
+          const result = await handleRequestSingle(rpcRequest, poolMap, io);
           if (result.status === 'success') {
             res.statusCode = 200;
             res.end(JSON.stringify({
