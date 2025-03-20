@@ -1,33 +1,32 @@
 /**
- * Handles a single JSON-RPC request by sending it to one randomly selected client
+ * Handles a single JSON-RPC request by sending it to one client
  * @param {Object} rpcRequest - The JSON-RPC request object
+ * @param {Object} selectedClient - The selected client object to send the request to
  * @param {Map} poolMap - Map containing all connected clients 
  * @param {Object} io - Socket.IO instance
  * @returns {Promise<Object>} - Promise resolving to the result of the RPC request
  */
-const { selectRandomClients } = require('./selectRandomClients');
 const { logNode } = require('./logNode');
 const { addPendingPoints } = require('./pendingPointsManager');
 
 const { socketTimeout } = require('../config');
 
-async function handleRequestSingle(rpcRequest, poolMap, io) {
+async function handleRequestSingle(rpcRequest, selectedClient, poolMap, io) {
   const startTime = Date.now();
   const utcTimestamp = new Date().toISOString();
 
-  const selectedClients = selectRandomClients(poolMap, 1);
-  if (selectedClients.error) {
+  if (selectedClient.error) {
     return { 
       status: 'error', 
       data: {
-        code: selectedClients.code,
-        message: selectedClients.error
+        code: selectedClient.code,
+        message: selectedClient.error
       }
     };
   }
 
   // Get the single client ID
-  const clientId = selectedClients.socket_ids[0];
+  const clientId = selectedClient.socket_ids[0];
 
   // Create a promise that will resolve with the response or error if it times out
   return new Promise((resolve, reject) => {

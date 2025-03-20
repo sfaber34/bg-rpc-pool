@@ -10,6 +10,7 @@ const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObje
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
 const { countCurrentClients } = require('./utils/countCurrentClients');
+const { selectRandomClients } = require('./utils/selectRandomClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 
@@ -208,16 +209,19 @@ const httpServerInternal = require('https').createServer(
             }));
             return;
           } else if (currentClients < 3) {
-            result = await handleRequestSingle(rpcRequest, poolMap, io);
+            const selectedClient = selectRandomClients(poolMap, 1);
+            result = await handleRequestSingle(rpcRequest, selectedClient, poolMap, io);
           } else {
             const useSetHandler = Math.floor(Math.random() * requestSetChance) === 0;
             
             if (useSetHandler) {
               console.log(`Randomly selected handleRequestSet (1/${requestSetChance} probability)`);
-              result = await handleRequestSet(rpcRequest, poolMap, io);
+              const selectedClients = selectRandomClients(poolMap, 3);
+              result = await handleRequestSet(rpcRequest, selectedClients, poolMap, io);
             } else {
               console.log(`Randomly selected handleRequestSingle (${requestSetChance-1}/${requestSetChance} probability)`);
-              result = await handleRequestSingle(rpcRequest, poolMap, io);
+              const selectedClient = selectRandomClients(poolMap, 1);
+              result = await handleRequestSingle(rpcRequest, selectedClient, poolMap, io);
             }
           }
           
