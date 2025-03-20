@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Manages the queuing and processing of points awarded to node owners
+ * Points are accumulated in memory and periodically processed in batches
+ * to reduce database load
+ */
+
 const { incrementOwnerPoints } = require('../database_scripts/incrementOwnerPoints');
 const { pointUpdateInterval } = require('../config');
 
@@ -20,9 +26,10 @@ setInterval(async () => {
 }, pointUpdateInterval);
 
 /**
- * Add points to pending queue for a specific owner
- * @param {string} owner - Owner address or identifier
- * @param {number} pointsToAdd - Number of points to add
+ * Adds points to the pending queue for a node owner
+ * Points are accumulated and processed in batches to optimize database operations
+ * @param {string} owner - Owner's address or identifier
+ * @param {number} pointsToAdd - Number of points to add to the owner's pending total
  */
 function addPendingPoints(owner, pointsToAdd) {
   if (!owner) return;

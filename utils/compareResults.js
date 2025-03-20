@@ -1,3 +1,13 @@
+/**
+ * Compares RPC responses from multiple nodes to check for consensus and identify mismatches
+ * @param {Map<string, Object>} responseMap - Map of client IDs to their responses
+ * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
+ * @returns {Object} Result object containing:
+ *   - resultsMatch: boolean indicating if all responses match
+ *   - mismatchedNode: ID of the node with mismatched response
+ *   - mismatchedOwner: Owner of the node with mismatched response
+ *   - mismatchedResults: Array of mismatched results with details
+ */
 function compareResults(responseMap, poolMap) {
   // Initialize return object
   const result = {

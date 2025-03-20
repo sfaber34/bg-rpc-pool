@@ -1,3 +1,11 @@
+/**
+ * Creates an object containing consensus peer addresses and related information for all clients
+ * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
+ * @returns {Object} Object containing array of consensus peer addresses with:
+ *   - machineID: Node machine identifier
+ *   - consensusPeerAddr: Node's ENR address
+ *   - consensusClient: Type of consensus client being used (lowercase)
+ */
 function getConsensusPeerAddrObject(poolMap) {
   const consensusPeerAddr = [];
   

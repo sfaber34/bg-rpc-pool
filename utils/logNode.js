@@ -1,6 +1,16 @@
 const fs = require('fs');
 const { poolNodeLogPath } = require('../config');
 
+/**
+ * Logs information about a node's RPC request and response
+ * @param {Object} req - The request object containing the RPC method and parameters
+ * @param {number} startTime - Unix timestamp when the request started
+ * @param {string} utcTimestamp - ISO formatted UTC timestamp
+ * @param {number} duration - Request duration in milliseconds
+ * @param {string|Object} status - Response status or error object
+ * @param {string} [machineId='unknown'] - ID of the node machine
+ * @param {string} [owner='unknown'] - Owner of the node
+ */
 function logNode(req, startTime, utcTimestamp, duration, status, machineId = 'unknown', owner = 'unknown') {
   const { method, params } = req.body;
 
