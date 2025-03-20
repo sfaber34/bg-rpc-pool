@@ -20,7 +20,7 @@ function countCurrentClients(poolMap) {
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
   
   // Count clients at the highest block
-  const highestBlockClients = clients.filter(
+  const highestBlockClients = clientsWithBlocks.filter(
     client => parseInt(client.block_number) === highestBlock
   );
   
