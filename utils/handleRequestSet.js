@@ -3,7 +3,7 @@
  * and returning the first successful response
  * 
  * @param {Object} rpcRequest - The JSON-RPC request object
- * @param {Object} selectedClients - The selected clients object to send the request to
+ * @param {Array} selectedSocketIds - Array of socket IDs to send the request to
  * @param {Map} poolMap - Map containing all connected clients 
  * @param {Object} io - Socket.IO instance
  * @returns {Promise<Object>} - Promise resolving to the result of the RPC request
@@ -15,16 +15,16 @@ const { addPendingPoints } = require('./pendingPointsManager');
 
 const { socketTimeout } = require('../config');
 
-async function handleRequestSet(rpcRequest, selectedClients, poolMap, io) {
+async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
   const startTime = Date.now();
   const utcTimestamp = new Date().toISOString();
 
-  if (selectedClients.error) {
+  if (!Array.isArray(selectedSocketIds) || selectedSocketIds.length === 0) {
     return { 
       status: 'error', 
       data: {
-        code: selectedClients.code,
-        message: selectedClients.error
+        code: -69000,
+        message: "No clients selected"
       }
     };
   }
@@ -35,9 +35,9 @@ async function handleRequestSet(rpcRequest, selectedClients, poolMap, io) {
   // Create a promise that will resolve with the fastest successful response or error if all timeout
   return new Promise((resolve, reject) => {
     let hasResolved = false;  // Flag to track if we've resolved with a response
-    let pendingResponses = selectedClients.socket_ids.length;  // Track remaining responses
+    let pendingResponses = selectedSocketIds.length;  // Track remaining responses
 
-    selectedClients.socket_ids.forEach(clientId => {
+    selectedSocketIds.forEach(clientId => {
       const client = poolMap.get(clientId);
       const socket = io.sockets.sockets.get(client.wsID);
       let hasReceivedResponse = false;  // Track if this specific client has responded
@@ -79,7 +79,6 @@ async function handleRequestSet(rpcRequest, selectedClients, poolMap, io) {
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
-
         if (hasReceivedResponse) {
           console.error(`Ignoring duplicate response from node ${client.id}`);
           return;
@@ -163,16 +162,12 @@ async function handleRequestSet(rpcRequest, selectedClients, poolMap, io) {
 
         // If this was the last pending response, log all responses and resolve if we haven't already
         if (pendingResponses === 0) {
-          // don't delete these comments please
-          // console.log('Final RPC responses:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
           console.log('👍 All responses received');
 
           const { resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults } = compareResults(responseMap, poolMap);
           console.log('Results match:', resultsMatch);
           console.log('Mismatched node:', mismatchedNode);
           console.log('Mismatched owner:', mismatchedOwner);
-          // Please don't delete these comments
-          // console.log('Mismatched results:', mismatchedResults);
           
           logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap, rpcRequest.method, rpcRequest.params);
           

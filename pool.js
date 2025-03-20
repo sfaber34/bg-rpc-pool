@@ -9,7 +9,6 @@ const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
-const { countCurrentClients } = require('./utils/countCurrentClients');
 const { selectRandomClients } = require('./utils/selectRandomClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
@@ -193,10 +192,10 @@ const httpServerInternal = require('https').createServer(
         try {
           let result;
 
-          const currentClients = countCurrentClients(poolMap);
-          console.log(`Current clients: ${currentClients}`);
+          const selectedClients = selectRandomClients(poolMap);
+          console.log(`Current clients: ${selectedClients}`);
 
-          if (currentClients === 0) {
+          if (selectedClients.length === 0) {
             console.log("No clients connected to pool");
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -208,20 +207,17 @@ const httpServerInternal = require('https').createServer(
               id: rpcRequest.id
             }));
             return;
-          } else if (currentClients < 3) {
-            const selectedClient = selectRandomClients(poolMap, 1);
-            result = await handleRequestSingle(rpcRequest, selectedClient, poolMap, io);
+          } else if (selectedClients.length < 3) {
+            result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
           } else {
             const useSetHandler = Math.floor(Math.random() * requestSetChance) === 0;
             
             if (useSetHandler) {
               console.log(`Randomly selected handleRequestSet (1/${requestSetChance} probability)`);
-              const selectedClients = selectRandomClients(poolMap, 3);
               result = await handleRequestSet(rpcRequest, selectedClients, poolMap, io);
             } else {
               console.log(`Randomly selected handleRequestSingle (${requestSetChance-1}/${requestSetChance} probability)`);
-              const selectedClient = selectRandomClients(poolMap, 1);
-              result = await handleRequestSingle(rpcRequest, selectedClient, poolMap, io);
+              result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
             }
           }
           

@@ -1,65 +1,39 @@
-function selectRandomClients(poolMap, nClients) {
-  // Get all clients and their block numbers
+function selectRandomClients(poolMap) {
+  // Get all clients and filter those with block numbers
   const clients = Array.from(poolMap.values());
-  // don't delete this comment
-  // console.log(`Total connected clients: ${clients.length}`);
+  const clientsWithBlocks = clients.filter(client => client.block_number !== undefined);
   
-  if (clients.length === 0) {
-    console.error('No clients connected to the pool');
-    return { 
-      code: -69000,
-      error: "No clients connected to the pool" 
-    };
+  // If no clients have block numbers, return empty array
+  if (clientsWithBlocks.length === 0) {
+    return [];
   }
 
   // Find the highest block number
-  const clientsWithBlocks = clients.filter(client => client.block_number !== undefined);
-  // don't delete this comment
-  // console.log(`Clients with block numbers: ${clientsWithBlocks.length}`);
-  
-  if (clientsWithBlocks.length === 0) {
-    console.error('No clients have reported their block number yet');
-    return { 
-      code: -69001,
-      error: "No clients have reported their block number yet"
-    };
-  }
-
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
-  // don't delete this comment
-  // console.log(`Highest block number: ${highestBlock}`);
 
   // Filter clients at the highest block
   const highestBlockClients = clients.filter(
     client => parseInt(client.block_number) === highestBlock
   );
-  console.log(`Clients at highest block: ${highestBlockClients.length}`);
 
-  if (highestBlockClients.length < nClients) {
-    console.error(`Not enough clients at highest block. Requested: ${nClients}, Available: ${highestBlockClients.length}`);
-    return {
-      code: -69002,
-      error: `Not enough clients at highest block ${highestBlock}. Requested: ${nClients}, Available: ${highestBlockClients.length}`
-    };
+  // If no clients at highest block, return empty array
+  if (highestBlockClients.length === 0) {
+    return [];
   }
 
-  // Randomly select unique clients
-  const selectedClients = new Set();
+  // Randomly select up to 3 clients
+  const selectedSocketIds = [];
   const availableClients = [...highestBlockClients];
+  const numToSelect = Math.min(3, availableClients.length);
 
-  while (selectedClients.size < nClients && availableClients.length > 0) {
+  while (selectedSocketIds.length < numToSelect && availableClients.length > 0) {
     const randomIndex = Math.floor(Math.random() * availableClients.length);
     const client = availableClients[randomIndex];
-    selectedClients.add(client.wsID);
+    selectedSocketIds.push(client.wsID);
     availableClients.splice(randomIndex, 1);
   }
 
-  console.log(`Selected ${selectedClients.size} clients at block ${highestBlock}`);
-  console.log('Selected client IDs:', Array.from(selectedClients).join(', '));
-  return {
-    socket_ids: Array.from(selectedClients),
-    block_number: highestBlock
-  };
+  return selectedSocketIds;
 }
 
 module.exports = { selectRandomClients }; 
