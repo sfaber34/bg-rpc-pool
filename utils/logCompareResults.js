@@ -2,6 +2,17 @@ const fs = require('fs');
 
 const { compareResultsLogPath } = require('../config');
 
+/**
+ * Logs the results of comparing RPC responses from multiple nodes
+ * @param {boolean} resultsMatch - Whether all node responses matched
+ * @param {string} mismatchedNode - ID of the node with mismatched response
+ * @param {string} mismatchedOwner - Owner of the node with mismatched response
+ * @param {Array<string>} mismatchedResults - Array of mismatched results details
+ * @param {Map<string, Object>} responseMap - Map of client IDs to their responses
+ * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
+ * @param {string} method - The RPC method that was called
+ * @param {Array<*>} params - The parameters that were passed to the RPC method
+ */
 function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap, method, params) {
     // Get current timestamp in UTC
     const now = new Date();

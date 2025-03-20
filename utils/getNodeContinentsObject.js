@@ -17,6 +17,11 @@ const nodeContinents = {
     }
 };
 
+/**
+ * Retrieves the geographical distribution of nodes across continents
+ * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
+ * @returns {Object} Object containing counts of nodes per continent
+ */
 async function getNodeContinentsObject(poolMap) {
     try {
         await constructNodeContinentsObject(poolMap);
@@ -27,6 +32,11 @@ async function getNodeContinentsObject(poolMap) {
     }
 }
 
+/**
+ * Constructs the node distribution object by querying IP locations from database
+ * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
+ * @private
+ */
 async function constructNodeContinentsObject(poolMap) {
     let dbPool;
     try {
