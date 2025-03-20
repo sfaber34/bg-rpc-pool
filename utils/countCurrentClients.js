@@ -6,8 +6,12 @@ function countCurrentClients(poolMap) {
 
   const clients = Array.from(poolMap.values());
   
-  // Get only clients that have reported a block number
-  const clientsWithBlocks = clients.filter(client => client.block_number !== undefined);
+  // Get only clients that have reported a valid block number (not undefined or "N/A")
+  const clientsWithBlocks = clients.filter(client => 
+    client.block_number !== undefined && 
+    client.block_number !== "N/A" &&
+    !isNaN(parseInt(client.block_number))
+  );
   if (clientsWithBlocks.length === 0) {
     return 0;
   }
