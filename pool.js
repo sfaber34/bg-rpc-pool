@@ -193,7 +193,7 @@ const httpServerInternal = require('https').createServer(
           let result;
 
           const selectedClients = selectRandomClients(poolMap);
-          console.log(`Current clients: ${selectedClients}`);
+          console.log(`Selected clients: ${selectedClients}`);
 
           if (selectedClients.length === 0) {
             console.log("No clients connected to pool");

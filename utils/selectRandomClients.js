@@ -1,9 +1,15 @@
 function selectRandomClients(poolMap) {
-  // Get all clients and filter those with block numbers
+  // Get all clients and filter those with valid block numbers
   const clients = Array.from(poolMap.values());
-  const clientsWithBlocks = clients.filter(client => client.block_number !== undefined);
+  const clientsWithBlocks = clients.filter(client => {
+    const blockNum = client.block_number;
+    return blockNum !== undefined && 
+           blockNum !== null && 
+           blockNum !== "N/A" && 
+           !isNaN(parseInt(blockNum));
+  });
   
-  // If no clients have block numbers, return empty array
+  // If no clients have valid block numbers, return empty array
   if (clientsWithBlocks.length === 0) {
     return [];
   }
@@ -12,7 +18,7 @@ function selectRandomClients(poolMap) {
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
 
   // Filter clients at the highest block
-  const highestBlockClients = clients.filter(
+  const highestBlockClients = clientsWithBlocks.filter(
     client => parseInt(client.block_number) === highestBlock
   );
 
