@@ -9,7 +9,7 @@ const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
-const { selectRandomClients } = require('./utils/selectRandomClients');
+const { selectRandomClients, fetchNodeTimingData } = require('./utils/selectRandomClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 
@@ -17,6 +17,15 @@ const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance } = requ
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
+const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
+const DAILY_FETCH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+// Set up daily fetch
+setInterval(() => {
+  fetchNodeTimingData(poolMap).catch(error => {
+    console.error('Error in daily fetchNodeTimingData:', error.message);
+  });
+}, DAILY_FETCH_INTERVAL);
 
 // SSL configuration for Socket.IO server
 const wsServer = https.createServer({
@@ -311,6 +320,18 @@ io.on('connection', (socket) => {
         // If this is the first checkin for a node, update the continents data
         constructNodeContinentsObject(poolMap).catch(err => {
           console.error('Error updating node continents:', err);
+        });
+      }
+
+      // Only update timing data for new nodes with valid IDs that we haven't processed yet
+      if (params.id && 
+          params.id !== "N/A" && 
+          params.id !== null && 
+          params.id !== undefined && 
+          !processedTimingNodes.has(params.id)) {
+        processedTimingNodes.add(params.id);
+        fetchNodeTimingData(poolMap).catch(err => {
+          console.error('Error updating node timing data:', err);
         });
       }
     } catch (error) {
