@@ -81,6 +81,8 @@ async function fetchNodeTimingData(poolMap) {
  * 4. Randomly chooses up to 3 clients from those at the highest block
  */
 function selectRandomClients(poolMap) {
+  console.log('Starting selectRandomClients with pool size:', poolMap.size);
+  
   // Log the timing data if available
   if (nodeTimingLastWeek) {
     console.log('Node timing data:');
@@ -91,44 +93,121 @@ function selectRandomClients(poolMap) {
 
   // Get all clients and filter those with valid block numbers
   const clients = Array.from(poolMap.values());
+  console.log('Total clients in pool:', clients.length);
+  
   const clientsWithBlocks = clients.filter(client => {
     const blockNum = client.block_number;
-    return blockNum !== undefined && 
+    const isValid = blockNum !== undefined && 
            blockNum !== null && 
            blockNum !== "N/A" && 
            !isNaN(parseInt(blockNum));
+    console.log(`Client ${client.wsID} block number: ${blockNum}, valid: ${isValid}`);
+    return isValid;
   });
+  
+  console.log('Clients with valid blocks:', clientsWithBlocks.length);
   
   // If no clients have valid block numbers, return empty array
   if (clientsWithBlocks.length === 0) {
+    console.log('No clients with valid block numbers found');
     return [];
   }
 
   // Find the highest block number
   const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
+  console.log('Highest block number:', highestBlock);
 
   // Filter clients at the highest block
   const highestBlockClients = clientsWithBlocks.filter(
     client => parseInt(client.block_number) === highestBlock
   );
+  console.log('Clients at highest block:', highestBlockClients.length);
 
   // If no clients at highest block, return empty array
   if (highestBlockClients.length === 0) {
+    console.log('No clients at highest block');
     return [];
   }
 
-  // Randomly select up to 3 clients
-  const selectedSocketIds = [];
-  const availableClients = [...highestBlockClients];
-  const numToSelect = Math.min(3, availableClients.length);
+  // Create the selection pool
+  let selectionPool = [...highestBlockClients];
+  console.log('Initial selection pool size:', selectionPool.length);
+  
+  if (nodeTimingLastWeek) {
+    // Check if all nodes are slow
+    const allNodesSlow = highestBlockClients.every(client => {
+      const timing = nodeTimingLastWeek[client.wsID];
+      return timing && timing > spotCheckOnlyThreshold;
+    });
 
-  while (selectedSocketIds.length < numToSelect && availableClients.length > 0) {
-    const randomIndex = Math.floor(Math.random() * availableClients.length);
-    const client = availableClients[randomIndex];
-    selectedSocketIds.push(client.wsID);
-    availableClients.splice(randomIndex, 1);
+    if (allNodesSlow) {
+      console.log('All nodes are slow, returning empty array');
+      return [];
+    }
+
+    // Identify all slow nodes
+    const slowNodes = highestBlockClients.filter(client => {
+      const timing = nodeTimingLastWeek[client.wsID];
+      const isSlow = timing && timing > spotCheckOnlyThreshold;
+      console.log(`Client ${client.wsID} timing: ${timing}, isSlow: ${isSlow}`);
+      return isSlow;
+    });
+    console.log('Slow nodes count:', slowNodes.length);
+
+    // If we have more than 2 slow nodes, randomly select only 2 to include
+    if (slowNodes.length > 2) {
+      console.log('More than 2 slow nodes, filtering selection pool');
+      // Remove all slow nodes from the selection pool
+      selectionPool = selectionPool.filter(client => {
+        const timing = nodeTimingLastWeek[client.wsID];
+        return !timing || timing <= spotCheckOnlyThreshold;
+      });
+      console.log('Selection pool after removing slow nodes:', selectionPool.length);
+
+      // Randomly select 2 slow nodes to add back
+      const availableSlowNodes = [...slowNodes];
+      for (let i = 0; i < 2; i++) {
+        const randomIndex = Math.floor(Math.random() * availableSlowNodes.length);
+        selectionPool.push(availableSlowNodes[randomIndex]);
+        availableSlowNodes.splice(randomIndex, 1);
+      }
+      console.log('Final selection pool size after adding back slow nodes:', selectionPool.length);
+    }
   }
 
+  // If we have no nodes in the selection pool, return empty array
+  if (selectionPool.length === 0) {
+    console.log('Selection pool is empty');
+    return [];
+  }
+
+  const selectedSocketIds = [];
+  const numToSelect = Math.min(3, selectionPool.length);
+  console.log('Number of clients to select:', numToSelect);
+
+  // First, select from fast nodes
+  const availableNodes = [...selectionPool];
+  const numFastToSelect = Math.min(numToSelect, availableNodes.length);
+  console.log('Starting selection loop with', availableNodes.length, 'available nodes');
+
+  while (selectedSocketIds.length < numFastToSelect && availableNodes.length > 0) {
+    const randomIndex = Math.floor(Math.random() * availableNodes.length);
+    const client = availableNodes[randomIndex];
+    
+    // Only add the node if it's not a slow node or if we already have a fast node
+    const timing = nodeTimingLastWeek ? nodeTimingLastWeek[client.wsID] : null;
+    const isSlowNode = timing && timing > spotCheckOnlyThreshold;
+    
+    console.log(`Attempting to select client ${client.wsID}, isSlow: ${isSlowNode}, current selection size: ${selectedSocketIds.length}`);
+    
+    if (!isSlowNode || selectedSocketIds.length > 0) {
+      selectedSocketIds.push(client.wsID);
+      availableNodes.splice(randomIndex, 1);
+      console.log(`Selected client ${client.wsID}, new selection size: ${selectedSocketIds.length}`);
+    }
+  }
+
+  console.log('Final selected clients:', selectedSocketIds);
   return selectedSocketIds;
 }
 
