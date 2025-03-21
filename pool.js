@@ -18,6 +18,7 @@ const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTim
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
 const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
+const pendingTimingSockets = new Set(); // Track socket IDs that need timing data once they get a valid node ID
 
 // Set up daily fetch
 setInterval(() => {
@@ -297,13 +298,15 @@ io.on('connection', (socket) => {
   const client = { socket, wsID: socket.id };
   poolMap.set(socket.id, client);
   socket.emit('init', { id: socket.id });
+  
+  // Add socket to pending timing set when it first connects
+  pendingTimingSockets.add(socket.id);
 
   // Handle checkin messages
   socket.on('checkin', async (message) => {
     try {
       // Handle both old and new format
       const params = message.params || message;
-      // console.log(`Received checkin message: ${JSON.stringify(params)}`);
       const existingClient = poolMap.get(socket.id);
       
       // Extract machine ID from the node ID if it's in the format "bgnodeX-..."
@@ -319,6 +322,21 @@ io.on('connection', (socket) => {
       });
       console.log(`Updated client ${socket.id} in pool. id: ${params.id}, machine_id: ${machineId}, block_number: ${params.block_number}`);
       
+      // Check if this socket was pending timing data and now has a valid machine ID
+      if (pendingTimingSockets.has(socket.id) && 
+          machineId && 
+          machineId !== "N/A" && 
+          machineId !== null && 
+          machineId !== undefined) {
+        pendingTimingSockets.delete(socket.id);
+        if (!processedTimingNodes.has(machineId)) {
+          processedTimingNodes.add(machineId);
+          fetchNodeTimingData(poolMap).catch(err => {
+            console.error('Error updating node timing data:', err);
+          });
+        }
+      }
+      
       // Only call updateLocationTable for new nodes
       if (params.enode && !seenNodes.has(params.enode)) {
         seenNodes.add(params.enode);
@@ -330,18 +348,6 @@ io.on('connection', (socket) => {
         // If this is the first checkin for a node, update the continents data
         constructNodeContinentsObject(poolMap).catch(err => {
           console.error('Error updating node continents:', err);
-        });
-      }
-
-      // Only update timing data for new nodes with valid IDs that we haven't processed yet
-      if (machineId && 
-          machineId !== "N/A" && 
-          machineId !== null && 
-          machineId !== undefined && 
-          !processedTimingNodes.has(machineId)) {
-        processedTimingNodes.add(machineId);
-        fetchNodeTimingData(poolMap).catch(err => {
-          console.error('Error updating node timing data:', err);
         });
       }
     } catch (error) {
