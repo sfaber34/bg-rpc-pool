@@ -13,19 +13,18 @@ const { selectRandomClients, fetchNodeTimingData } = require('./utils/selectRand
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval } = require('./config');
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
 const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
-const DAILY_FETCH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 // Set up daily fetch
 setInterval(() => {
   fetchNodeTimingData(poolMap).catch(error => {
     console.error('Error in daily fetchNodeTimingData:', error.message);
   });
-}, DAILY_FETCH_INTERVAL);
+}, nodeTimingFetchInterval);
 
 // SSL configuration for Socket.IO server
 const wsServer = https.createServer({
@@ -306,8 +305,19 @@ io.on('connection', (socket) => {
       const params = message.params || message;
       // console.log(`Received checkin message: ${JSON.stringify(params)}`);
       const existingClient = poolMap.get(socket.id);
-      poolMap.set(socket.id, { ...existingClient, ...params });
-      console.log(`Updated client ${socket.id} in pool. id: ${params.id}, block_number: ${params.block_number}`);
+      
+      // Extract machine ID from the node ID if it's in the format "bgnodeX-..."
+      let machineId = params.id;
+      if (params.id && typeof params.id === 'string' && params.id.startsWith('bgnode')) {
+        machineId = params.id;
+      }
+      
+      poolMap.set(socket.id, { 
+        ...existingClient, 
+        ...params,
+        machine_id: machineId // Set the machine_id field
+      });
+      console.log(`Updated client ${socket.id} in pool. id: ${params.id}, machine_id: ${machineId}, block_number: ${params.block_number}`);
       
       // Only call updateLocationTable for new nodes
       if (params.enode && !seenNodes.has(params.enode)) {
@@ -324,12 +334,12 @@ io.on('connection', (socket) => {
       }
 
       // Only update timing data for new nodes with valid IDs that we haven't processed yet
-      if (params.id && 
-          params.id !== "N/A" && 
-          params.id !== null && 
-          params.id !== undefined && 
-          !processedTimingNodes.has(params.id)) {
-        processedTimingNodes.add(params.id);
+      if (machineId && 
+          machineId !== "N/A" && 
+          machineId !== null && 
+          machineId !== undefined && 
+          !processedTimingNodes.has(machineId)) {
+        processedTimingNodes.add(machineId);
         fetchNodeTimingData(poolMap).catch(err => {
           console.error('Error updating node timing data:', err);
         });

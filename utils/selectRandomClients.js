@@ -1,11 +1,12 @@
 const axios = require('axios');
 
 const host = process.env.HOST;
+const { spotCheckOnlyThreshold } = require('../config');
 
 // Module-level variable to store timing data
 let nodeTimingLastWeek = null;
 let lastFetchTime = null;
-const spotCheckOnlyThreshold = 150; // milliseconds
+
 
 /**
  * Transforms nodeTimingLastWeek keys from machine IDs to socket IDs
@@ -15,13 +16,15 @@ const spotCheckOnlyThreshold = 150; // milliseconds
  */
 function transformTimingDataKeys(timingData, poolMap) {
   if (!timingData) return null;
-  
+    
   const transformedData = {};
   for (const [machineId, timing] of Object.entries(timingData)) {
     // Find the socket ID associated with this machine ID
     for (const [socketId, client] of poolMap.entries()) {
-      if (client.node_id === machineId) {
+      // Match using machine_id instead of node_id
+      if (client.machine_id === machineId) {
         transformedData[socketId] = timing;
+        console.log(`Matched machine ID ${machineId} to socket ID ${socketId}`);
         break;
       }
     }
@@ -51,10 +54,16 @@ function hasValidNodeId(client) {
 async function fetchNodeTimingData(poolMap) {
   try {
     const response = await axios.get(`https://${host}:3001/nodeTimingLastWeek`);
+  
     // Transform the timing data to use socket IDs as keys
     nodeTimingLastWeek = transformTimingDataKeys(response.data, poolMap);
     lastFetchTime = Date.now();
-    console.log('Node timing data fetched:', nodeTimingLastWeek);
+    
+    // Log the timing data without quotes in keys
+    console.log('Node timing data fetched:');
+    Object.entries(nodeTimingLastWeek).forEach(([key, value]) => {
+      console.log(`  ${key}: ${value}`);
+    });
   } catch (error) {
     console.error('Error fetching node timing data:', error.message);
   }
@@ -74,7 +83,10 @@ async function fetchNodeTimingData(poolMap) {
 function selectRandomClients(poolMap) {
   // Log the timing data if available
   if (nodeTimingLastWeek) {
-    console.log('Node timing data:', JSON.stringify(nodeTimingLastWeek, null, 2));
+    console.log('Node timing data:');
+    Object.entries(nodeTimingLastWeek).forEach(([key, value]) => {
+      console.log(`  ${key}: ${value}`);
+    });
   }
 
   // Get all clients and filter those with valid block numbers
