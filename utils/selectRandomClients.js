@@ -207,7 +207,6 @@ function selectRandomClients(poolMap) {
     }
   }
 
-  console.log('Final selected clients:', selectedSocketIds);
   return selectedSocketIds;
 }
 
