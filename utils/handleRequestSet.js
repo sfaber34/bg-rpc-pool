@@ -139,11 +139,16 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
           // Resolve with the first successful response if we haven't already
           if (!hasResolved) {
             hasResolved = true;
-            // Only award points to the owner of the fastest response
+            // Award 10 points to the owner of the fastest response
             if (client.owner) {
               addPendingPoints(client.owner, 10);
             }
             resolve({ status: 'success', data: response.result });
+          } else {
+            // Award 5 points to subsequent successful responders
+            if (client.owner) {
+              addPendingPoints(client.owner, 5);
+            }
           }
         } else {
           // Handle case where response is valid JSON-RPC but missing both error and result
