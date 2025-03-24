@@ -320,7 +320,7 @@ io.on('connection', (socket) => {
         ...params,
         machine_id: machineId // Set the machine_id field
       });
-      console.log(`Updated client ${socket.id} in pool. id: ${params.id}, machine_id: ${machineId}, block_number: ${params.block_number}`);
+      console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${params.block_number}`);
       
       // Check if this socket was pending timing data and now has a valid machine ID
       if (pendingTimingSockets.has(socket.id) && 
