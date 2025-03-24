@@ -9,14 +9,23 @@ const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
-const { selectRandomClients } = require('./utils/selectRandomClients');
+const { selectRandomClients, fetchNodeTimingData } = require('./utils/selectRandomClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval } = require('./config');
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
+const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
+const pendingTimingSockets = new Set(); // Track socket IDs that need timing data once they get a valid node ID
+
+// Set up daily fetch
+setInterval(() => {
+  fetchNodeTimingData(poolMap).catch(error => {
+    console.error('Error in daily fetchNodeTimingData:', error.message);
+  });
+}, nodeTimingFetchInterval);
 
 // SSL configuration for Socket.IO server
 const wsServer = https.createServer({
@@ -289,16 +298,44 @@ io.on('connection', (socket) => {
   const client = { socket, wsID: socket.id };
   poolMap.set(socket.id, client);
   socket.emit('init', { id: socket.id });
+  
+  // Add socket to pending timing set when it first connects
+  pendingTimingSockets.add(socket.id);
 
   // Handle checkin messages
   socket.on('checkin', async (message) => {
     try {
       // Handle both old and new format
       const params = message.params || message;
-      // console.log(`Received checkin message: ${JSON.stringify(params)}`);
       const existingClient = poolMap.get(socket.id);
-      poolMap.set(socket.id, { ...existingClient, ...params });
-      console.log(`Updated client ${socket.id} in pool. id: ${params.id}, block_number: ${params.block_number}`);
+      
+      // Extract machine ID from the node ID if it's in the format "bgnodeX-..."
+      let machineId = params.id;
+      if (params.id && typeof params.id === 'string' && params.id.startsWith('bgnode')) {
+        machineId = params.id;
+      }
+      
+      poolMap.set(socket.id, { 
+        ...existingClient, 
+        ...params,
+        machine_id: machineId // Set the machine_id field
+      });
+      console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${params.block_number}`);
+      
+      // Check if this socket was pending timing data and now has a valid machine ID
+      if (pendingTimingSockets.has(socket.id) && 
+          machineId && 
+          machineId !== "N/A" && 
+          machineId !== null && 
+          machineId !== undefined) {
+        pendingTimingSockets.delete(socket.id);
+        if (!processedTimingNodes.has(machineId)) {
+          processedTimingNodes.add(machineId);
+          fetchNodeTimingData(poolMap).catch(err => {
+            console.error('Error updating node timing data:', err);
+          });
+        }
+      }
       
       // Only call updateLocationTable for new nodes
       if (params.enode && !seenNodes.has(params.enode)) {
