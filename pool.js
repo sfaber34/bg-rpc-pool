@@ -290,7 +290,7 @@ const wss = new WebSocket.Server({ server: wsServerInternal });
 // Don't delete this
 // Set up cache update interval
 // setInterval(() => {
-//   updateCache(wss, poolMap).catch(error => {
+//   updateCache(wss, poolMap, io).catch(error => {
 //     console.error('Error in cache update interval:', error.message);
 //   });
 // }, cacheUpdateInterval);
@@ -371,7 +371,7 @@ io.on('connection', (socket) => {
       
       // Update cache immediately when a node checks in with new block number
       if (params.block_number) {
-        updateCache(wss, poolMap).catch(error => {
+        updateCache(wss, poolMap, io).catch(error => {
           console.error('Error updating cache after checkin:', error.message);
         });
       }
