@@ -13,8 +13,9 @@ const { constructNodeContinentsObject, getNodeContinentsObject } = require('./ut
 const { selectRandomClients, fetchNodeTimingData } = require('./utils/selectRandomClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
+const { updateCache } = require('./utils/updateCache');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, cacheUpdateInterval } = require('./config');
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
@@ -286,6 +287,14 @@ const wsServerInternal = require('https').createServer(
 // Create WebSocket server attached to the HTTPS server
 const wss = new WebSocket.Server({ server: wsServerInternal });
 
+// Don't delete this
+// Set up cache update interval
+// setInterval(() => {
+//   updateCache(wss, poolMap).catch(error => {
+//     console.error('Error in cache update interval:', error.message);
+//   });
+// }, cacheUpdateInterval);
+
 // Handle WebSocket connections
 wss.on('connection', (ws) => {
   console.log('New WebSocket client connected');
@@ -359,6 +368,13 @@ io.on('connection', (socket) => {
         machine_id: machineId // Set the machine_id field
       });
       console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${params.block_number}`);
+      
+      // Update cache immediately when a node checks in with new block number
+      if (params.block_number) {
+        updateCache(wss, poolMap).catch(error => {
+          console.error('Error updating cache after checkin:', error.message);
+        });
+      }
       
       // Check if this socket was pending timing data and now has a valid machine ID
       if (pendingTimingSockets.has(socket.id) && 
