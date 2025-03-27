@@ -137,7 +137,7 @@ function selectRandomClients(poolMap) {
     // Check if all nodes are slow
     const allNodesSlow = highestBlockClients.every(client => {
       const timing = nodeTimingLastWeek[client.wsID];
-      return timing && timing > spotCheckOnlyThreshold;
+      return timing === undefined || timing > spotCheckOnlyThreshold;
     });
 
     if (allNodesSlow) {
@@ -148,7 +148,7 @@ function selectRandomClients(poolMap) {
     // Identify all slow nodes
     const slowNodes = highestBlockClients.filter(client => {
       const timing = nodeTimingLastWeek[client.wsID];
-      const isSlow = timing && timing > spotCheckOnlyThreshold;
+      const isSlow = timing === undefined || timing > spotCheckOnlyThreshold;
       console.log(`Client ${client.wsID} timing: ${timing}, isSlow: ${isSlow}`);
       return isSlow;
     });
@@ -157,7 +157,7 @@ function selectRandomClients(poolMap) {
     // Create selection pool starting with non-slow nodes
     selectionPool = selectionPool.filter(client => {
       const timing = nodeTimingLastWeek[client.wsID];
-      return !timing || timing <= spotCheckOnlyThreshold;
+      return timing !== undefined && timing <= spotCheckOnlyThreshold;
     });
     console.log('Selection pool after removing slow nodes:', selectionPool.length);
 
@@ -201,7 +201,7 @@ function selectRandomClients(poolMap) {
     // Find first fast node
     const fastNodeIndex = selectedNodes.findIndex(node => {
       const timing = nodeTimingLastWeek[node.wsID];
-      return !timing || timing <= spotCheckOnlyThreshold;
+      return timing !== undefined && timing <= spotCheckOnlyThreshold;
     });
 
     if (fastNodeIndex !== -1) {
