@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const https = require('https');
 const fs = require('fs');
+const WebSocket = require('ws');
 
 const { updateLocationTable } = require('./database_scripts/updateLocationTable');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
@@ -12,8 +13,9 @@ const { constructNodeContinentsObject, getNodeContinentsObject } = require('./ut
 const { selectRandomClients, fetchNodeTimingData } = require('./utils/selectRandomClients');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
+const { updateCache } = require('./utils/updateCache');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, cacheUpdateInterval } = require('./config');
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
@@ -91,7 +93,7 @@ const io = new Server(wsServer, {
 });
 
 // Create HTTP server for the API endpoint (no SSL)
-const httpServerInternal = require('https').createServer(
+const wsServerInternal = require('https').createServer(
   {
     key: fs.readFileSync('/home/ubuntu/shared/server.key'),
     cert: fs.readFileSync('/home/ubuntu/shared/server.cert'),
@@ -282,14 +284,59 @@ const httpServerInternal = require('https').createServer(
   }
 });
 
+// Create WebSocket server attached to the HTTPS server
+const wss = new WebSocket.Server({ server: wsServerInternal });
+
+// Don't delete this
+// Set up cache update interval
+// setInterval(() => {
+//   updateCache(wss, poolMap, io).catch(error => {
+//     console.error('Error in cache update interval:', error.message);
+//   });
+// }, cacheUpdateInterval);
+
+// Handle WebSocket connections
+wss.on('connection', (ws) => {
+  console.log('Proxy.js WebSocket connected');
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      console.log('Received WebSocket message:', data);
+      
+      // Echo back the message for testing
+      ws.send(JSON.stringify({
+        type: 'response',
+        data: data
+      }));
+    } catch (error) {
+      console.error('Error processing WebSocket message:', error);
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Invalid message format'
+      }));
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('WebSocket client disconnected');
+  });
+
+  // Send initial connection message
+  ws.send(JSON.stringify({
+    type: 'connected',
+    message: 'Successfully connected to WebSocket server'
+  }));
+});
+
 console.log("----------------------------------------------------------------------------------------------------------------");
 console.log("----------------------------------------------------------------------------------------------------------------");
 wsServer.listen(portPoolPublic, () => {
   console.log(`Socket.IO server listening on port ${portPoolPublic}...`);
 });
 
-httpServerInternal.listen(poolPort, () => {
-  console.log(`HTTP server (poolPort) listening on port ${poolPort}...`);
+wsServerInternal.listen(poolPort, () => {
+  console.log(`WS server (poolPort) listening on port ${poolPort}...`);
 });
 
 io.on('connection', (socket) => {
@@ -321,6 +368,13 @@ io.on('connection', (socket) => {
         machine_id: machineId // Set the machine_id field
       });
       console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${params.block_number}`);
+      
+      // Update cache immediately when a node checks in with new block number
+      if (params.block_number) {
+        updateCache(wss, poolMap, io).catch(error => {
+          console.error('Error updating cache after checkin:', error.message);
+        });
+      }
       
       // Check if this socket was pending timing data and now has a valid machine ID
       if (pendingTimingSockets.has(socket.id) && 
