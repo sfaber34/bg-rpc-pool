@@ -297,7 +297,7 @@ const wss = new WebSocket.Server({ server: wsServerInternal });
 
 // Handle WebSocket connections
 wss.on('connection', (ws) => {
-  console.log('New WebSocket client connected');
+  console.log('Proxy.js WebSocket connected');
 
   ws.on('message', (message) => {
     try {
