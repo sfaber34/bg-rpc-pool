@@ -27,11 +27,14 @@ async function fetchChainId(poolMap, io) {
   try {
     // Get the first available node
     const firstNode = Array.from(poolMap.values())[0];
-    if (!firstNode) return null;
+    if (!firstNode) {
+      console.error('No nodes available in the pool');
+      return null;
+    }
 
     // Ensure we have a valid client with the correct structure
-    if (!firstNode.socket || !firstNode.wsID) {
-      console.error('Invalid client structure:', firstNode);
+    if (!firstNode.wsID) {
+      console.error('Invalid client structure: missing wsID');
       return null;
     }
 
@@ -43,9 +46,18 @@ async function fetchChainId(poolMap, io) {
     };
 
     const response = await handleRequestSingle(rpcRequest, [firstNode.wsID], poolMap, io);
+    
     if (response.status === 'success') {
-      return response.data;
+      // Validate that the chainId is a valid hex string
+      const chainId = response.data;
+      if (typeof chainId === 'string' && chainId.startsWith('0x')) {
+        return chainId;
+      }
+      console.error('Invalid chain ID format received:', chainId);
+      return null;
     }
+
+    console.error('Failed to fetch chain ID:', response.data);
     return null;
   } catch (error) {
     console.error('Error fetching chain ID:', error);
