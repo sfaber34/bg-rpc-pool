@@ -357,6 +357,7 @@ io.on('connection', (socket) => {
       const existingClient = poolMap.get(socket.id);
       
       // Extract machine ID from the node ID if it's in the format "bgnodeX-..."
+      // TODO: Figure out why this is needed. Seems weird.
       let machineId = params.id;
       if (params.id && typeof params.id === 'string' && params.id.startsWith('bgnode')) {
         machineId = params.id;
