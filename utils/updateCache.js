@@ -66,9 +66,11 @@ async function fetchChainId(poolMap, io) {
 }
 
 // Broadcast cache updates to all connected clients
-function broadcastUpdate(wss, method, value, timestamp = Date.now()) {
+function broadcastUpdate(wss, method, params, value, timestamp = Date.now()) {
   const message = JSON.stringify({ 
+    type: 'cacheUpdate',
     method, 
+    params,
     value: serializeValue(value), 
     timestamp 
   });
@@ -103,14 +105,14 @@ async function updateCache(wss, poolMap, io) {
     if (maxBlockNumber !== null && (lastKnownBlockNumber === null || maxBlockNumber > lastKnownBlockNumber)) {
       lastKnownBlockNumber = maxBlockNumber;
       const timestamp = Date.now();
-      broadcastUpdate(wss, 'eth_blockNumber', maxBlockNumber, timestamp);
+      broadcastUpdate(wss, 'eth_blockNumber', [], maxBlockNumber, timestamp);
 
       // If this is the first block number we've received and we haven't broadcast chain ID yet,
       // fetch and broadcast the chain ID
       if (!hasBroadcastChainId && lastKnownBlockNumber !== null) {
         const chainId = await fetchChainId(poolMap, io);
         if (chainId !== null) {
-          broadcastUpdate(wss, 'eth_chainId', chainId, null);
+          broadcastUpdate(wss, 'eth_chainId', [], chainId, null);
           hasBroadcastChainId = true;
         }
       }
