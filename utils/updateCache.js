@@ -65,8 +65,8 @@ async function fetchChainId(poolMap, io) {
   }
 }
 
-// Broadcast cache updates to all connected clients
-function broadcastUpdate(wss, method, params, value, timestamp = Date.now()) {
+// Broadcast cache updates to proxy.js
+function broadcastUpdate(wssCache, method, params, value, timestamp = Date.now()) {
   const message = JSON.stringify({ 
     type: 'cacheUpdate',
     method, 
@@ -78,7 +78,7 @@ function broadcastUpdate(wss, method, params, value, timestamp = Date.now()) {
   // Log the update
   console.log(`Updated local cache for ${method}: ${serializeValue(value)}`);
 
-  wss.clients.forEach((client) => {
+  wssCache.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
@@ -86,7 +86,7 @@ function broadcastUpdate(wss, method, params, value, timestamp = Date.now()) {
 }
 
 // Update cache based on pool map
-async function updateCache(wss, poolMap, io) {
+async function updateCache(wssCache, poolMap, io) {
   try {
     // Find the largest block number from all nodes in the pool
     let maxBlockNumber = null;
@@ -105,14 +105,14 @@ async function updateCache(wss, poolMap, io) {
     if (maxBlockNumber !== null && (lastKnownBlockNumber === null || maxBlockNumber > lastKnownBlockNumber)) {
       lastKnownBlockNumber = maxBlockNumber;
       const timestamp = Date.now();
-      broadcastUpdate(wss, 'eth_blockNumber', [], maxBlockNumber, timestamp);
+      broadcastUpdate(wssCache, 'eth_blockNumber', [], maxBlockNumber, timestamp);
 
       // If this is the first block number we've received and we haven't broadcast chain ID yet,
       // fetch and broadcast the chain ID
       if (!hasBroadcastChainId && lastKnownBlockNumber !== null) {
         const chainId = await fetchChainId(poolMap, io);
         if (chainId !== null) {
-          broadcastUpdate(wss, 'eth_chainId', [], chainId, null);
+          broadcastUpdate(wssCache, 'eth_chainId', [], chainId, null);
           hasBroadcastChainId = true;
         }
       }

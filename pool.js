@@ -284,8 +284,8 @@ const wsServerInternal = require('https').createServer(
   }
 });
 
-// Create WebSocket server attached to the HTTPS server
-const wss = new WebSocket.Server({ server: wsServerInternal });
+// Create WebSocket server attached to the HTTPS server to send cache updates to proxy.js
+const wssCache = new WebSocket.Server({ server: wsServerInternal });
 
 // Don't delete this
 // Set up cache update interval
@@ -296,7 +296,7 @@ const wss = new WebSocket.Server({ server: wsServerInternal });
 // }, cacheUpdateInterval);
 
 // Handle WebSocket connections
-wss.on('connection', (ws) => {
+wssCache.on('connection', (ws) => {
   console.log('Proxy.js WebSocket connected');
 
   ws.on('message', (message) => {
@@ -372,7 +372,7 @@ io.on('connection', (socket) => {
       
       // Update cache immediately when a node checks in with new block number
       if (params.block_number) {
-        updateCache(wss, poolMap, io).catch(error => {
+        updateCache(wssCache, poolMap, io).catch(error => {
           console.error('Error updating cache after checkin:', error.message);
         });
       }
