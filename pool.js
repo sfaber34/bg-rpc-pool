@@ -21,6 +21,7 @@ const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTim
 // Map of RPC methods that can be cached with their block number parameter positions
 const cacheableMethods = new Map([
   ['eth_getBalance', 1],
+  ['eth_getStorageAt', 2],
   ['eth_getTransactionCount', 1]
 ]);
 
