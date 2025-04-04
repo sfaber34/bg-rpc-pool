@@ -70,13 +70,13 @@ function broadcastUpdate(wssCache, method, params, value, timestamp = Date.now()
   const message = JSON.stringify({ 
     type: 'cacheUpdate',
     method, 
-    params,
+    params: params || [],
     value: serializeValue(value), 
     timestamp 
   });
 
-  // Log the update
-  console.log(`Updated local cache for ${method}: ${serializeValue(value)}`);
+  // Log the update with params for better debugging
+  console.log(`Updated local cache for ${method} with params ${JSON.stringify(params)}: ${serializeValue(value)}`);
 
   wssCache.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
