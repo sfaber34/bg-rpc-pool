@@ -14,8 +14,15 @@ const { selectRandomClients, fetchNodeTimingData } = require('./utils/selectRand
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
+const { broadcastUpdate } = require('./utils/updateCache');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, cacheUpdateInterval } = require('./config');
+
+// Map of RPC methods that can be cached with their block number parameter positions
+const cacheableMethods = new Map([
+  ['eth_getBalance', 1],
+  ['eth_getTransactionCount', 1]
+]);
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
@@ -239,6 +246,27 @@ const wsServerInternal = require('https').createServer(
               result: result.data,
               id: rpcRequest.id
             }));
+
+            // Check if method is cacheable and block number is a hex value
+            const method = rpcRequest.method;
+            console.log(`💾 Method: ${method}`);
+            if (cacheableMethods.has(method)) {
+              console.log(`💾 Is cacheable method`);
+              const blockNumberPosition = cacheableMethods.get(method);
+              const params = rpcRequest.params || [];
+              const blockNumber = params[blockNumberPosition];
+              console.log(`💾 Block number position: ${blockNumberPosition}`);
+              console.log(`💾 Params: ${params}`);
+              console.log(`💾 Block number: ${blockNumber}`);
+              
+              // Check if blockNumber is a hex value (not a keyword)
+              if (blockNumber && typeof blockNumber === 'string' && 
+                  blockNumber.startsWith('0x') && 
+                  !['latest', 'earliest', 'pending', 'safe', 'finalized'].includes(blockNumber)) {
+                // Broadcast cache update to proxy.js
+                broadcastUpdate(wssCache, method, params, result.data, null);
+              }
+            }
           } else {
             res.statusCode = 500;
             res.end(JSON.stringify({
