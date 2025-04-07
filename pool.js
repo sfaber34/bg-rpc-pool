@@ -31,6 +31,7 @@ const cacheableMethods = new Map([
 // To Add (Don't delete)
 //eth_getBlockTransactionCountByHash (No block number parameter)
 //eth_getUncleCountByBlockHash (No block number parameter)
+//eth_call??
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
