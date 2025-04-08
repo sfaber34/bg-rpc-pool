@@ -22,15 +22,16 @@ const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTim
 const cacheableMethods = new Map([
   ['eth_call', 1],
   ['eth_getBalance', 1],
+  ['eth_getBlockTransactionCountByHash', null],
   ['eth_getBlockTransactionCountByNumber', 0],
   ['eth_getCode', 1],
   ['eth_getStorageAt', 2],
   ['eth_getTransactionCount', 1],
   ['eth_getUncleCountByBlockNumber', 0],
+  ['eth_getUncleCountByBlockHash', null],
 ]);
 
 // To Add (Don't delete)
-//eth_getBlockTransactionCountByHash (No block number parameter)
 //eth_getUncleCountByBlockHash (No block number parameter)
 
 const poolMap = new Map();
@@ -263,17 +264,25 @@ const wsServerInternal = require('https').createServer(
               console.log(`💾 Is cacheable method`);
               const blockNumberPosition = cacheableMethods.get(method);
               const params = rpcRequest.params || [];
-              const blockNumber = params[blockNumberPosition];
-              console.log(`💾 Block number position: ${blockNumberPosition}`);
-              console.log(`💾 Params: ${params}`);
-              console.log(`💾 Block number: ${blockNumber}`);
               
-              // Check if blockNumber is a hex value (not a keyword)
-              if (blockNumber && typeof blockNumber === 'string' && 
-                  blockNumber.startsWith('0x') && 
-                  !['latest', 'earliest', 'pending', 'safe', 'finalized'].includes(blockNumber)) {
-                // Broadcast cache update to proxy.js
+              // For methods with null blockNumberPosition (like eth_getBlockTransactionCountByHash),
+              // we can cache without checking block number
+              if (blockNumberPosition === null) {
+                console.log(`💾 Method has no block number parameter, caching directly`);
                 broadcastUpdate(wssCache, method, params, result.data, null);
+              } else {
+                const blockNumber = params[blockNumberPosition];
+                console.log(`💾 Block number position: ${blockNumberPosition}`);
+                console.log(`💾 Params: ${params}`);
+                console.log(`💾 Block number: ${blockNumber}`);
+                
+                // Check if blockNumber is a hex value (not a keyword)
+                if (blockNumber && typeof blockNumber === 'string' && 
+                    blockNumber.startsWith('0x') && 
+                    !['latest', 'earliest', 'pending', 'safe', 'finalized'].includes(blockNumber)) {
+                  // Broadcast cache update to proxy.js
+                  broadcastUpdate(wssCache, method, params, result.data, null);
+                }
               }
             }
           } else {
