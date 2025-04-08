@@ -22,6 +22,7 @@ const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTim
 const cacheableMethods = new Map([
   ['eth_call', 1],
   ['eth_getBalance', 1],
+  ['eth_getBlockByNumber', 0],
   ['eth_getBlockTransactionCountByHash', null],
   ['eth_getBlockTransactionCountByNumber', 0],
   ['eth_getCode', 1],
@@ -32,7 +33,12 @@ const cacheableMethods = new Map([
 ]);
 
 // To Add (Don't delete)
-//eth_getUncleCountByBlockHash (No block number parameter)
+// eth_getBlockByNumber
+// eth_getCode
+// eth_getLogs
+// eth_getTransactionCount
+// net_version
+// eth_gasPrice
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
