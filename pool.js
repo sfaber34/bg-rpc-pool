@@ -20,6 +20,7 @@ const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTim
 
 // Map of RPC methods that can be cached with their block number parameter positions
 const cacheableMethods = new Map([
+  ['eth_call', 1],
   ['eth_getBalance', 1],
   ['eth_getBlockTransactionCountByNumber', 0],
   ['eth_getCode', 1],
@@ -31,7 +32,6 @@ const cacheableMethods = new Map([
 // To Add (Don't delete)
 //eth_getBlockTransactionCountByHash (No block number parameter)
 //eth_getUncleCountByBlockHash (No block number parameter)
-//eth_call??
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
