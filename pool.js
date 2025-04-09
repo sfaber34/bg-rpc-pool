@@ -270,7 +270,7 @@ const wsServerInternal = require('https').createServer(
               // we can cache without checking block number
               if (blockNumberPosition === null) {
                 console.log(`💾 Method has no block number parameter, caching directly`);
-                broadcastUpdate(wssCache, method, params, result.data, null);
+                broadcastUpdate(wssCache, method, params, result.data);
               } else {
                 const blockNumber = params[blockNumberPosition];
                 console.log(`💾 Block number position: ${blockNumberPosition}`);
@@ -282,7 +282,7 @@ const wsServerInternal = require('https').createServer(
                     blockNumber.startsWith('0x') && 
                     !['latest', 'earliest', 'pending', 'safe', 'finalized'].includes(blockNumber)) {
                   // Broadcast cache update to proxy.js
-                  broadcastUpdate(wssCache, method, params, result.data, null);
+                  broadcastUpdate(wssCache, method, params, result.data);
                 }
               }
             }
