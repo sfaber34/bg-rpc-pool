@@ -104,17 +104,16 @@ async function updateCache(wssCache, poolMap, io) {
     // Only broadcast if we have valid data and it's different from last known
     if (maxBlockNumber !== null && (lastKnownBlockNumber === null || maxBlockNumber > lastKnownBlockNumber)) {
       lastKnownBlockNumber = maxBlockNumber;
-      const timestamp = Date.now();
       // Convert block number to hex string with 0x prefix
       const hexBlockNumber = '0x' + maxBlockNumber.toString(16);
-      broadcastUpdate(wssCache, 'eth_blockNumber', [], hexBlockNumber, timestamp);
+      broadcastUpdate(wssCache, 'eth_blockNumber', [], hexBlockNumber);
 
       // If this is the first block number we've received and we haven't broadcast chain ID yet,
       // fetch and broadcast the chain ID
       if (!hasBroadcastChainId && lastKnownBlockNumber !== null) {
         const chainId = await fetchChainId(poolMap, io);
         if (chainId !== null) {
-          broadcastUpdate(wssCache, 'eth_chainId', [], chainId, null);
+          broadcastUpdate(wssCache, 'eth_chainId', [], chainId);
           hasBroadcastChainId = true;
         }
       }

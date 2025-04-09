@@ -33,12 +33,7 @@ const cacheableMethods = new Map([
 ]);
 
 // To Add (Don't delete)
-// eth_getBlockByNumber
-// eth_getCode
-// eth_getLogs
-// eth_getTransactionCount
-// net_version
-// eth_gasPrice
+// eth_getLogs (this one is nasty; multiple block number parameters and block hash)
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
