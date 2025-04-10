@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const { handleRequestSingle } = require('./handleRequestSingle');
+const { selectRandomClients } = require('./selectRandomClients');
 
 // Track last known block number to avoid duplicate updates
 let lastKnownBlockNumber = null;
@@ -25,18 +26,14 @@ function isValidBlockNumber(value) {
 // Fetch chain ID from a node
 async function fetchChainId(poolMap, io) {
   try {
-    // Get the first available node
-    const firstNode = Array.from(poolMap.values())[0];
-    if (!firstNode) {
+    // Get a random node using selectRandomClients
+    const selectedNodes = selectRandomClients(poolMap);
+    if (!selectedNodes || selectedNodes.length === 0) {
       console.error('No nodes available in the pool');
       return null;
     }
 
-    // Ensure we have a valid client with the correct structure
-    if (!firstNode.wsID) {
-      console.error('Invalid client structure: missing wsID');
-      return null;
-    }
+    const selectedNode = selectedNodes[0];
 
     const rpcRequest = {
       jsonrpc: '2.0',
@@ -45,7 +42,7 @@ async function fetchChainId(poolMap, io) {
       id: 1
     };
 
-    const response = await handleRequestSingle(rpcRequest, [firstNode.wsID], poolMap, io);
+    const response = await handleRequestSingle(rpcRequest, [selectedNode], poolMap, io);
     
     if (response.status === 'success') {
       // Validate that the chainId is a valid hex string
