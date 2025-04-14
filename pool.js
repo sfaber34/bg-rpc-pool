@@ -14,8 +14,26 @@ const { selectRandomClients, fetchNodeTimingData } = require('./utils/selectRand
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
+const { broadcastUpdate } = require('./utils/updateCache');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, cacheUpdateInterval } = require('./config');
+
+// Map of RPC methods that can be cached with their block number parameter positions
+const cacheableMethods = new Map([
+  ['eth_call', 1],
+  ['eth_getBalance', 1],
+  ['eth_getBlockByNumber', 0],
+  ['eth_getBlockTransactionCountByHash', null],
+  ['eth_getBlockTransactionCountByNumber', 0],
+  ['eth_getCode', 1],
+  ['eth_getStorageAt', 2],
+  ['eth_getTransactionCount', 1],
+  ['eth_getUncleCountByBlockNumber', 0],
+  ['eth_getUncleCountByBlockHash', null],
+]);
+
+// To Add (Don't delete)
+// eth_getLogs (this one is nasty; multiple block number parameters and block hash)
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
@@ -239,6 +257,35 @@ const wsServerInternal = require('https').createServer(
               result: result.data,
               id: rpcRequest.id
             }));
+
+            // Check if method is cacheable and block number is a hex value
+            const method = rpcRequest.method;
+            console.log(`💾 Method: ${method}`);
+            if (cacheableMethods.has(method)) {
+              console.log(`💾 Is cacheable method`);
+              const blockNumberPosition = cacheableMethods.get(method);
+              const params = rpcRequest.params || [];
+              
+              // For methods with null blockNumberPosition (like eth_getBlockTransactionCountByHash),
+              // we can cache without checking block number
+              if (blockNumberPosition === null) {
+                console.log(`💾 Method has no block number parameter, caching directly`);
+                broadcastUpdate(wssCache, method, params, result.data);
+              } else {
+                const blockNumber = params[blockNumberPosition];
+                console.log(`💾 Block number position: ${blockNumberPosition}`);
+                console.log(`💾 Params: ${params}`);
+                console.log(`💾 Block number: ${blockNumber}`);
+                
+                // Check if blockNumber is a hex value (not a keyword)
+                if (blockNumber && typeof blockNumber === 'string' && 
+                    blockNumber.startsWith('0x') && 
+                    !['latest', 'earliest', 'pending', 'safe', 'finalized'].includes(blockNumber)) {
+                  // Broadcast cache update to proxy.js
+                  broadcastUpdate(wssCache, method, params, result.data);
+                }
+              }
+            }
           } else {
             res.statusCode = 500;
             res.end(JSON.stringify({
@@ -284,8 +331,8 @@ const wsServerInternal = require('https').createServer(
   }
 });
 
-// Create WebSocket server attached to the HTTPS server
-const wss = new WebSocket.Server({ server: wsServerInternal });
+// Create WebSocket server attached to the HTTPS server to send cache updates to proxy.js
+const wssCache = new WebSocket.Server({ server: wsServerInternal });
 
 // Don't delete this
 // Set up cache update interval
@@ -296,7 +343,7 @@ const wss = new WebSocket.Server({ server: wsServerInternal });
 // }, cacheUpdateInterval);
 
 // Handle WebSocket connections
-wss.on('connection', (ws) => {
+wssCache.on('connection', (ws) => {
   console.log('Proxy.js WebSocket connected');
 
   ws.on('message', (message) => {
@@ -357,6 +404,7 @@ io.on('connection', (socket) => {
       const existingClient = poolMap.get(socket.id);
       
       // Extract machine ID from the node ID if it's in the format "bgnodeX-..."
+      // TODO: Figure out why this is needed. Seems weird.
       let machineId = params.id;
       if (params.id && typeof params.id === 'string' && params.id.startsWith('bgnode')) {
         machineId = params.id;
@@ -371,7 +419,7 @@ io.on('connection', (socket) => {
       
       // Update cache immediately when a node checks in with new block number
       if (params.block_number) {
-        updateCache(wss, poolMap, io).catch(error => {
+        updateCache(wssCache, poolMap, io).catch(error => {
           console.error('Error updating cache after checkin:', error.message);
         });
       }
