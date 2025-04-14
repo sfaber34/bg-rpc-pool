@@ -417,7 +417,7 @@ io.on('connection', (socket) => {
       });
       console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${params.block_number}`);
       
-      // Update cache immediately when a node checks in with new block number
+      // Update cache immediately when a node checks in with new block number.
       if (params.block_number) {
         updateCache(wssCache, poolMap, io).catch(error => {
           console.error('Error updating cache after checkin:', error.message);
