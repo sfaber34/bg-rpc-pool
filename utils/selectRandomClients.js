@@ -75,10 +75,11 @@ async function fetchNodeTimingData(poolMap) {
  * @returns {Array<string>} Array of selected client socket IDs (can range in length from 0 to 3 depending on the number of clients at the highest block)
  * @description
  * The function:
- * 1. Filters clients with valid block numbers
- * 2. Identifies the highest block number among all clients
- * 3. Selects only clients at the highest block
- * 4. Randomly chooses up to 3 clients from those at the highest block
+ * 1. Filters clients that have properly checked in (have required properties)
+ * 2. Filters clients with valid block numbers
+ * 3. Identifies the highest block number among all clients
+ * 4. Selects only clients at the highest block
+ * 5. Randomly chooses up to 3 clients from those at the highest block
  */
 function selectRandomClients(poolMap) {
   console.log('Starting selectRandomClients with pool size:', poolMap.size);
@@ -91,11 +92,33 @@ function selectRandomClients(poolMap) {
     });
   }
 
-  // Get all clients and filter those with valid block numbers
+  // Get all clients and filter those that have properly checked in
   const clients = Array.from(poolMap.values());
   console.log('Total clients in pool:', clients.length);
   
-  const clientsWithBlocks = clients.filter(client => {
+  const checkedInClients = clients.filter(client => {
+    const hasRequiredProps = client.id && 
+                           client.owner && 
+                           client.wsID && 
+                           client.machine_id &&
+                           client.machine_id !== "N/A" &&
+                           client.machine_id !== null &&
+                           client.machine_id !== undefined;
+    if (!hasRequiredProps) {
+      console.log(`Client ${client.wsID} skipped: missing required properties`);
+    }
+    return hasRequiredProps;
+  });
+  
+  console.log('Clients properly checked in:', checkedInClients.length);
+  
+  // If no clients have checked in properly, return empty array
+  if (checkedInClients.length === 0) {
+    console.log('No properly checked-in clients found');
+    return [];
+  }
+  
+  const clientsWithBlocks = checkedInClients.filter(client => {
     const blockNum = client.block_number;
     const isValid = blockNum !== undefined && 
            blockNum !== null && 
