@@ -185,8 +185,8 @@ const wsServerInternal = require('https').createServer(
       res.end(JSON.stringify({
         jsonrpc: "2.0",
         error: {
-          code: -32603,
-          message: "Internal error",
+          code: -70001,
+          message: "Internal Pool service error",
           data: err.message
         },
         id: null
@@ -202,21 +202,6 @@ const wsServerInternal = require('https').createServer(
         const rpcRequest = JSON.parse(body);
         console.log("-----------------------------------------------------------------------------------------");
         console.log('❔Received RPC request:', JSON.stringify(rpcRequest, null, 2));
-
-        // Validate RPC request format
-        if (!rpcRequest.jsonrpc || rpcRequest.jsonrpc !== "2.0" || !rpcRequest.method || rpcRequest.id === undefined) {
-          console.error('Invalid RPC request format:', JSON.stringify(rpcRequest, null, 2));
-          res.statusCode = 400;
-          res.end(JSON.stringify({
-            jsonrpc: "2.0",
-            error: {
-              code: -32600,
-              message: "Invalid request"
-            },
-            id: rpcRequest.id || null
-          }));
-          return;
-        }
 
         try {
           let result;
@@ -300,8 +285,8 @@ const wsServerInternal = require('https').createServer(
           res.end(JSON.stringify({
             jsonrpc: "2.0",
             error: {
-              code: -32603,
-              message: error.message || "Internal error"
+              code: -70001,
+              message: error.message || "Internal Pool service error"
             },
             id: rpcRequest.id
           }));

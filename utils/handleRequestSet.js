@@ -69,7 +69,7 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             resolve({ 
               status: 'error', 
               data: {
-                code: -32603,
+                code: -69006,
                 message: "All nodes timed out"
               }
             });

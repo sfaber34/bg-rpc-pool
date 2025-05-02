@@ -97,7 +97,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
           resolve({ 
             status: 'error', 
             data: {
-              code: -32603,
+              code: -69007,
               message: "Invalid response format from node"
             }
           });
@@ -158,7 +158,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
           resolve({ 
             status: 'error', 
             data: {
-              code: -32603,
+              code: -69007,
               message: "Invalid response from node (missing result and error)"
             }
           });
