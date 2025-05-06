@@ -158,7 +158,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
           resolve({ 
             status: 'error', 
             data: {
-              code: -69007,
+              code: -70002,
               message: "Invalid response from node (missing result and error)"
             }
           });

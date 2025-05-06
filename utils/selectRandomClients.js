@@ -7,31 +7,6 @@ const { spotCheckOnlyThreshold } = require('../config');
 let nodeTimingLastWeek = null;
 let lastFetchTime = null;
 
-
-/**
- * Transforms nodeTimingLastWeek keys from machine IDs to socket IDs
- * @param {Object} timingData - The original timing data with machine IDs as keys
- * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
- * @returns {Object} Transformed timing data with socket IDs as keys
- */
-function transformTimingDataKeys(timingData, poolMap) {
-  if (!timingData) return null;
-    
-  const transformedData = {};
-  for (const [machineId, timing] of Object.entries(timingData)) {
-    // Find the socket ID associated with this machine ID
-    for (const [socketId, client] of poolMap.entries()) {
-      // Match using machine_id instead of node_id
-      if (client.machine_id === machineId) {
-        transformedData[socketId] = timing;
-        console.log(`Matched machine ID ${machineId} to socket ID ${socketId}`);
-        break;
-      }
-    }
-  }
-  return transformedData;
-}
-
 /**
  * Checks if a node has both a socket ID and a valid node ID
  * @param {Object} client - The client object from poolMap
@@ -54,11 +29,8 @@ function hasValidNodeId(client) {
 async function fetchNodeTimingData(poolMap) {
   try {
     const response = await axios.get(`https://${host}:3001/nodeTimingLastWeek`);
-  
-    // Transform the timing data to use socket IDs as keys
-    nodeTimingLastWeek = transformTimingDataKeys(response.data, poolMap);
+    nodeTimingLastWeek = response.data; // Store by machine_id
     lastFetchTime = Date.now();
-    
     // Log the timing data without quotes in keys
     console.log('Node timing data fetched:');
     Object.entries(nodeTimingLastWeek).forEach(([key, value]) => {
@@ -159,7 +131,7 @@ function selectRandomClients(poolMap) {
   if (nodeTimingLastWeek) {
     // Check if all nodes are slow
     const allNodesSlow = highestBlockClients.every(client => {
-      const timing = nodeTimingLastWeek[client.wsID];
+      const timing = nodeTimingLastWeek[client.machine_id];
       return timing === undefined || timing > spotCheckOnlyThreshold;
     });
 
@@ -170,7 +142,7 @@ function selectRandomClients(poolMap) {
 
     // Identify all slow nodes
     const slowNodes = highestBlockClients.filter(client => {
-      const timing = nodeTimingLastWeek[client.wsID];
+      const timing = nodeTimingLastWeek[client.machine_id];
       const isSlow = timing === undefined || timing > spotCheckOnlyThreshold;
       console.log(`Client ${client.wsID} timing: ${timing}, isSlow: ${isSlow}`);
       return isSlow;
@@ -179,7 +151,7 @@ function selectRandomClients(poolMap) {
 
     // Create selection pool starting with non-slow nodes
     selectionPool = selectionPool.filter(client => {
-      const timing = nodeTimingLastWeek[client.wsID];
+      const timing = nodeTimingLastWeek[client.machine_id];
       return timing !== undefined && timing <= spotCheckOnlyThreshold;
     });
     console.log('Selection pool after removing slow nodes:', selectionPool.length);
@@ -223,7 +195,7 @@ function selectRandomClients(poolMap) {
   if (nodeTimingLastWeek) {
     // Find first fast node
     const fastNodeIndex = selectedNodes.findIndex(node => {
-      const timing = nodeTimingLastWeek[node.wsID];
+      const timing = nodeTimingLastWeek[node.machine_id];
       return timing !== undefined && timing <= spotCheckOnlyThreshold;
     });
 
