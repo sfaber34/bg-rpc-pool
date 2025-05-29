@@ -79,6 +79,11 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
+        if (hasResolved) { // If already resolved (e.g., by timeout), ignore this response
+          console.warn(`Ignoring response from node ${client.id} as the request already timed out.`);
+          return;
+        }
+
         if (hasReceivedResponse) {
           console.error(`Ignoring duplicate response from node ${client.id}`);
           return;
