@@ -49,6 +49,18 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
           client.owner || 'unknown'
         );
 
+        if (client) { // Ensure client object exists
+          if (!client.timeouts) {
+            client.timeouts = [];
+          }
+          client.timeouts.push(Date.now());
+          // Optional: Keep only timeouts from the last X minutes to prevent memory leak
+          const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+          client.timeouts = client.timeouts.filter(timestamp => timestamp > fiveMinutesAgo);
+          
+          console.log(`🚨 Recorded timeout for client ${client.id || 'unknown'}. Total recent: ${client.timeouts.length}`);
+        }
+
         // Remove the message handler for this client
         socket.removeAllListeners('rpc_request');
 

@@ -124,39 +124,74 @@ function selectRandomClients(poolMap) {
     return [];
   }
 
-  // Create the selection pool
-  let selectionPool = [...highestBlockClients];
-  console.log('Initial selection pool size:', selectionPool.length);
+  // ---> NEW CODE TO HANDLE RECENT TIMEOUTS <---
+  const MAX_RECENT_TIMEOUTS = 2; // Deprioritize if more than 2 timeouts in last 5 mins
+  const TIMEOUT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+  let viableHighestBlockClients = highestBlockClients.filter(client => {
+    const now = Date.now();
+    let recentTimeouts = 0;
+    if (client.timeouts && client.timeouts.length > 0) {
+      // Ensure client.timeouts is filtered for the relevant window,
+      // though handleRequestSingle also does this, a check here is robust.
+      client.timeouts = client.timeouts.filter(timestamp => (now - timestamp) < TIMEOUT_WINDOW_MS);
+      recentTimeouts = client.timeouts.length;
+    }
+
+    if (recentTimeouts > MAX_RECENT_TIMEOUTS) {
+      console.log(`Client ${client.wsID} (machine: ${client.machine_id}) deprioritized due to ${recentTimeouts} recent timeouts.`);
+      return false; // Exclude this client
+    }
+    return true;
+  });
+
+  console.log('Clients at highest block (after timeout filter):', viableHighestBlockClients.length);
+
+  // If all clients at the highest block were deprioritized, we might still want to try them as a last resort.
+  // For now, if viableHighestBlockClients is empty, the existing downstream logic will handle returning [].
+  if (viableHighestBlockClients.length === 0 && highestBlockClients.length > 0) {
+    console.log("All clients at highest block had too many recent timeouts. Proceeding with empty selection.");
+  }
+  // ---> END OF NEW CODE <---
+
+  // Create the selection pool - MODIFIED to use viableHighestBlockClients
+  let selectionPool = [...viableHighestBlockClients];
+  console.log('Initial selection pool size (from viable clients):', selectionPool.length);
   
   if (nodeTimingLastWeek) {
-    // Check if all nodes are slow
-    const allNodesSlow = highestBlockClients.every(client => {
+    // Check if all nodes in the viable list are slow - MODIFIED
+    const allNodesSlow = viableHighestBlockClients.every(client => {
       const timing = nodeTimingLastWeek[client.machine_id];
       return timing === undefined || timing > spotCheckOnlyThreshold;
     });
 
-    if (allNodesSlow) {
-      console.log('All nodes are slow, returning empty array');
+    if (allNodesSlow && viableHighestBlockClients.length > 0) { // check viableHighestBlockClients.length
+      console.log('All viable nodes are slow based on spotCheckOnlyThreshold, returning empty array');
       return [];
+    } else if (viableHighestBlockClients.length === 0 && highestBlockClients.length > 0) {
+      // This case is when all were filtered by timeouts; already logged.
+      // If highestBlockClients was also 0, then initial pool was empty anyway.
     }
 
-    // Identify all slow nodes
-    const slowNodes = highestBlockClients.filter(client => {
+
+    // Identify all slow nodes from the viable list - MODIFIED
+    const slowNodes = viableHighestBlockClients.filter(client => {
       const timing = nodeTimingLastWeek[client.machine_id];
       const isSlow = timing === undefined || timing > spotCheckOnlyThreshold;
-      console.log(`Client ${client.wsID} timing: ${timing}, isSlow: ${isSlow}`);
+      // console.log(`Client ${client.wsID} timing: ${timing}, isSlow: ${isSlow}`); // This can be verbose
       return isSlow;
     });
-    console.log('Slow nodes count:', slowNodes.length);
+    // console.log('Slow nodes count (from viable list):', slowNodes.length); // This can be verbose
 
-    // Create selection pool starting with non-slow nodes
-    selectionPool = selectionPool.filter(client => {
+    // Create selection pool starting with non-slow nodes from the viable list - MODIFIED
+    selectionPool = viableHighestBlockClients.filter(client => {
       const timing = nodeTimingLastWeek[client.machine_id];
       return timing !== undefined && timing <= spotCheckOnlyThreshold;
     });
-    console.log('Selection pool after removing slow nodes:', selectionPool.length);
+    console.log('Selection pool after removing spotCheck-slow nodes (from viable list):', selectionPool.length);
 
-    // If we have more than 2 slow nodes, randomly select 2 to add to the pool
+    // If we have more than 2 slow nodes (from the viable list), randomly select 2 to add to the pool
+    // MODIFIED to use slowNodes identified from viableHighestBlockClients
     if (slowNodes.length > 2) {
       const availableSlowNodes = [...slowNodes];
       for (let i = 0; i < 2; i++) {
@@ -193,7 +228,7 @@ function selectRandomClients(poolMap) {
 
   // Rearrange selected nodes to ensure a fast node is first
   if (nodeTimingLastWeek) {
-    // Find first fast node
+    // Find first fast node - operates on selectedNodes which are derived from selectionPool
     const fastNodeIndex = selectedNodes.findIndex(node => {
       const timing = nodeTimingLastWeek[node.machine_id];
       return timing !== undefined && timing <= spotCheckOnlyThreshold;
