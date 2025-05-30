@@ -132,7 +132,8 @@ function selectRandomClients(poolMap) {
     // Check if all nodes are slow
     const allNodesSlow = highestBlockClients.every(client => {
       const timing = nodeTimingLastWeek[client.machine_id];
-      return timing === undefined || timing > spotCheckOnlyThreshold;
+      // Only consider nodes slow if timing is defined and above threshold
+      return timing !== undefined && timing > spotCheckOnlyThreshold;
     });
 
     if (allNodesSlow) {
@@ -143,7 +144,8 @@ function selectRandomClients(poolMap) {
     // Identify all slow nodes
     const slowNodes = highestBlockClients.filter(client => {
       const timing = nodeTimingLastWeek[client.machine_id];
-      const isSlow = timing === undefined || timing > spotCheckOnlyThreshold;
+      // Only consider nodes slow if timing is defined and above threshold
+      const isSlow = timing !== undefined && timing > spotCheckOnlyThreshold;
       console.log(`Client ${client.wsID} timing: ${timing}, isSlow: ${isSlow}`);
       return isSlow;
     });
@@ -152,7 +154,8 @@ function selectRandomClients(poolMap) {
     // Create selection pool starting with non-slow nodes
     selectionPool = selectionPool.filter(client => {
       const timing = nodeTimingLastWeek[client.machine_id];
-      return timing !== undefined && timing <= spotCheckOnlyThreshold;
+      // Include if timing is undefined or timing is below or equal to threshold
+      return timing === undefined || timing <= spotCheckOnlyThreshold;
     });
     console.log('Selection pool after removing slow nodes:', selectionPool.length);
 
@@ -193,10 +196,10 @@ function selectRandomClients(poolMap) {
 
   // Rearrange selected nodes to ensure a fast node is first
   if (nodeTimingLastWeek) {
-    // Find first fast node
+    // Find first fast node (timing undefined or <= threshold)
     const fastNodeIndex = selectedNodes.findIndex(node => {
       const timing = nodeTimingLastWeek[node.machine_id];
-      return timing !== undefined && timing <= spotCheckOnlyThreshold;
+      return timing === undefined || timing <= spotCheckOnlyThreshold;
     });
 
     if (fastNodeIndex !== -1) {
