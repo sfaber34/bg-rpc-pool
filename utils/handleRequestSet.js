@@ -12,6 +12,7 @@ const { logNode } = require('./logNode');
 const { compareResults } = require('./compareResults');
 const { logCompareResults } = require('./logCompareResults');
 const { addPendingPoints } = require('./pendingPointsManager');
+const { ignoredErrorCodes } = require('../../shared/ignoredErrorCodes');
 
 const { socketTimeout } = require('../config');
 
@@ -79,20 +80,12 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
-        if (hasResolved) { // If already resolved (e.g., by timeout), ignore this response
-          console.warn(`Ignoring response from node ${client.id} as the request already timed out.`);
-          return;
-        }
-
-        if (hasReceivedResponse) {
-          console.error(`Ignoring duplicate response from node ${client.id}`);
-          return;
-        }
-
         // Mark as received immediately to prevent race conditions
-        hasReceivedResponse = true;
-        clearTimeout(timeoutId);
-        pendingResponses--;
+        if (!hasReceivedResponse) {
+          hasReceivedResponse = true;
+          clearTimeout(timeoutId);
+          pendingResponses--;
+        }
 
         // Now process the response
         const responseTime = Date.now() - startTime;
@@ -125,6 +118,14 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             client.id || 'unknown',
             client.owner || 'unknown'
           );
+          // If error code is in ignoredErrorCodes, resolve immediately with this error
+          if (response.error && ignoredErrorCodes.includes(response.error.code)) {
+            if (!hasResolved) {
+              hasResolved = true;
+              resolve({ status: 'error', data: response.error });
+            }
+            // Do not return here; continue to process for points, etc.
+          }
         } else if (response.result !== undefined) {
           responseMap.set(clientId, { 
             status: 'success',
@@ -140,7 +141,6 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             client.id || 'unknown',
             client.owner || 'unknown'
           );
-          
           // Resolve with the first successful response if we haven't already
           if (!hasResolved) {
             hasResolved = true;
