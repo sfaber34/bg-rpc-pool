@@ -32,6 +32,8 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
 
   // Map to store responses from each client
   const responseMap = new Map();
+  // Map to track if a response (timeout or actual) has been received for each client
+  const receivedResponseMap = new Map();
 
   // Create a promise that will resolve with the fastest successful response or error if all timeout
   return new Promise((resolve, reject) => {
@@ -41,13 +43,13 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
     selectedSocketIds.forEach(clientId => {
       const client = poolMap.get(clientId);
       const socket = io.sockets.sockets.get(client.wsID);
-      let hasReceivedResponse = false;  // Track if this specific client has responded
 
       // Set up timeout for each client
       const timeoutId = setTimeout(() => {
-        if (!hasReceivedResponse) {  // Only timeout if we haven't received a response
+        if (!receivedResponseMap.get(clientId)) {  // Only timeout if we haven't received a response
           pendingResponses--;
           responseMap.set(clientId, { status: 'timeout', time: Date.now() - startTime });
+          receivedResponseMap.set(clientId, true);
           
           // Log timeout error
           logNode(
@@ -80,12 +82,13 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
-        // Mark as received immediately to prevent race conditions
-        if (!hasReceivedResponse) {
-          hasReceivedResponse = true;
-          clearTimeout(timeoutId);
-          pendingResponses--;
+        if (receivedResponseMap.get(clientId)) {
+          // This is a late response after timeout, ignore it
+          return;
         }
+        receivedResponseMap.set(clientId, true);
+        clearTimeout(timeoutId);
+        pendingResponses--;
 
         // Now process the response
         const responseTime = Date.now() - startTime;
