@@ -12,6 +12,7 @@ const { logNode } = require('./logNode');
 const { compareResults } = require('./compareResults');
 const { logCompareResults } = require('./logCompareResults');
 const { addPendingPoints } = require('./pendingPointsManager');
+const { ignoredErrorCodes } = require('../../shared/ignoredErrorCodes');
 
 const { socketTimeout } = require('../config');
 
@@ -31,6 +32,8 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
 
   // Map to store responses from each client
   const responseMap = new Map();
+  // Map to track if a response (timeout or actual) has been received for each client
+  const receivedResponseMap = new Map();
 
   // Create a promise that will resolve with the fastest successful response or error if all timeout
   return new Promise((resolve, reject) => {
@@ -40,13 +43,13 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
     selectedSocketIds.forEach(clientId => {
       const client = poolMap.get(clientId);
       const socket = io.sockets.sockets.get(client.wsID);
-      let hasReceivedResponse = false;  // Track if this specific client has responded
 
       // Set up timeout for each client
       const timeoutId = setTimeout(() => {
-        if (!hasReceivedResponse) {  // Only timeout if we haven't received a response
+        if (!receivedResponseMap.get(clientId)) {  // Only timeout if we haven't received a response
           pendingResponses--;
           responseMap.set(clientId, { status: 'timeout', time: Date.now() - startTime });
+          receivedResponseMap.set(clientId, true);
           
           // Log timeout error
           logNode(
@@ -79,18 +82,11 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {
-        if (hasResolved) { // If already resolved (e.g., by timeout), ignore this response
-          console.warn(`Ignoring response from node ${client.id} as the request already timed out.`);
+        if (receivedResponseMap.get(clientId)) {
+          // This is a late response after timeout, ignore it
           return;
         }
-
-        if (hasReceivedResponse) {
-          console.error(`Ignoring duplicate response from node ${client.id}`);
-          return;
-        }
-
-        // Mark as received immediately to prevent race conditions
-        hasReceivedResponse = true;
+        receivedResponseMap.set(clientId, true);
         clearTimeout(timeoutId);
         pendingResponses--;
 
@@ -125,6 +121,14 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             client.id || 'unknown',
             client.owner || 'unknown'
           );
+          // If error code is in ignoredErrorCodes, resolve immediately with this error
+          if (response.error && ignoredErrorCodes.includes(response.error.code)) {
+            if (!hasResolved) {
+              hasResolved = true;
+              resolve({ status: 'error', data: response.error });
+            }
+            // Do not return here; continue to process for points, etc.
+          }
         } else if (response.result !== undefined) {
           responseMap.set(clientId, { 
             status: 'success',
@@ -140,7 +144,6 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             client.id || 'unknown',
             client.owner || 'unknown'
           );
-          
           // Resolve with the first successful response if we haven't already
           if (!hasResolved) {
             hasResolved = true;
