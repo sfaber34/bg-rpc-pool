@@ -15,6 +15,7 @@ const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
 const { broadcastUpdate } = require('./utils/updateCache');
+const { processNodesForBread } = require('./utils/processNodesForBread');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, cacheUpdateInterval } = require('./config');
 
@@ -36,6 +37,11 @@ const cacheableMethods = new Map([
 // eth_getLogs (this one is nasty; multiple block number parameters and block hash)
 
 const poolMap = new Map();
+
+// setInterval(() => {
+//   processNodesForBread(poolMap)
+// }, 60000);
+
 const seenNodes = new Set(); // Track nodes we've already processed
 const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
 const pendingTimingSockets = new Set(); // Track socket IDs that need timing data once they get a valid node ID
