@@ -1,6 +1,6 @@
-const { mintBread } = require('./mintBread');
+const { updateBreadTable } = require('../database_scripts/updateBreadTable');
 
-function processNodesForBread(poolMap) {
+async function processNodesForBread(poolMap) {
   try {
     // Convert poolMap values to array
     const nodes = Array.from(poolMap.values());
@@ -48,9 +48,8 @@ function processNodesForBread(poolMap) {
     console.log('Owners of nodes within 2 of the highest block_number:', result);
 
     if (result.length > 0) {
-      const owners = result.map(r => r.owner);
-      const counts = result.map(r => r.count);
-      mintBread(owners, counts);
+      // Update the bread table and wait for completion
+      await updateBreadTable(result);
     }
   } catch (error) {
     console.error('Error in processNodesForBread:', error);

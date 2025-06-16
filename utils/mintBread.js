@@ -3,6 +3,8 @@ const { privateKeyToAccount } = require("viem/accounts");
 const { baseSepolia } = require("viem/chains");
 const path = require("path");
 const dotenv = require("dotenv");
+const { getBreadTable } = require('../database_scripts/getBreadTable');
+const { resetBreadTable } = require('../database_scripts/resetBreadTable');
 
 // const __dirname = path.dirname(__filename);
 
@@ -188,12 +190,20 @@ const contractAbi = [
   },
 ];
 
-async function mintBread(addresses, amounts) {
+async function mintBread() {
   try {
     const key = process.env.RPC_BREAD_MINTER_KEY;
     const breadContractAddress = process.env.BREAD_CONTRACT_ADDRESS;
     if (!key) {
       console.error("No private key found in environment variables");
+      return;
+    }
+
+    // Get pending bread amounts from database
+    const { addresses, amounts } = await getBreadTable();
+    
+    if (addresses.length === 0) {
+      console.log("No pending bread to mint");
       return;
     }
 
@@ -216,6 +226,10 @@ async function mintBread(addresses, amounts) {
 
     console.log("🍞 Minted Bread");
     console.log("Transaction hash:", hash);
+    console.log(`Minted to ${addresses.length} addresses:`, addresses.map((addr, i) => `${addr}: ${amounts[i]}`));
+
+    // Reset the bread table after successful minting
+    await resetBreadTable();
   } catch (error) {
     console.error("Error in mintBread:", error);
   }

@@ -16,6 +16,7 @@ const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
 const { broadcastUpdate } = require('./utils/updateCache');
 const { processNodesForBread } = require('./utils/processNodesForBread');
+const { mintBread } = require('./utils/mintBread');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, cacheUpdateInterval } = require('./config');
 
@@ -38,9 +39,8 @@ const cacheableMethods = new Map([
 
 const poolMap = new Map();
 
-// setInterval(() => {
-//   processNodesForBread(poolMap)
-// }, 60000);
+// Counter to track processNodesForBread calls
+let breadProcessingCounter = 0;
 
 const seenNodes = new Set(); // Track nodes we've already processed
 const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
@@ -453,3 +453,24 @@ io.on('connection', (socket) => {
     poolMap.delete(socket.id);
   });
 });
+
+// New interval function that implements the 10-cycle logic
+// DON't DELETE THIS
+// setInterval(async () => {
+//   await processNodesForBread(poolMap);
+  
+//   breadProcessingCounter++;
+  
+//   // Call mintBread every 10th time
+//   if (breadProcessingCounter >= 10) {
+//     console.log('🍞 10 cycles completed, calling mintBread()');
+//     try {
+//       await mintBread();
+//     } catch (error) {
+//       console.error('Error in mintBread:', error);
+//     }
+//     breadProcessingCounter = 0; // Reset counter
+//   } else {
+//     console.log(`🍞 Bread processing cycle ${breadProcessingCounter}/10`);
+//   }
+// }, 10000);
