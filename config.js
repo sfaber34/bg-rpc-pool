@@ -7,7 +7,7 @@ const requestSetChance = 5; // 1 in n requests will be a set request
 // const requestSetChance = 1000000000000; // 1 in n requests will be a set request
 const spotCheckOnlyThreshold = 150; // The 75th percentile cuttoff for node response time (last week) that excludes nodes from handling single requests (milliseconds)
 const nodeTimingFetchInterval = 24 * 60 * 60 * 1000; // Interval for a forced fetching of node timing data (24 hours)
-const cacheUpdateInterval = 1000; // Interval for updating the cache (1 second)
+const poolNodeStaleThreshold = 5 * 60 * 1000; // 5 minutes Timeout threshold for stale nodes in poolMap
 
 const poolNodeLogPath = "/home/ubuntu/shared/poolNodes.log";
 const compareResultsLogPath = "/home/ubuntu/shared/poolCompareResults.log";
@@ -21,7 +21,7 @@ module.exports = {
   requestSetChance,
   spotCheckOnlyThreshold,
   nodeTimingFetchInterval,
-  cacheUpdateInterval,
+  poolNodeStaleThreshold,
 
   poolNodeLogPath,
   compareResultsLogPath,

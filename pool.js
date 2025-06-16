@@ -17,7 +17,7 @@ const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
 const { broadcastUpdate } = require('./utils/updateCache');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, cacheUpdateInterval } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold } = require('./config');
 
 // Map of RPC methods that can be cached with their block number parameter positions
 const cacheableMethods = new Map([
@@ -47,6 +47,34 @@ setInterval(() => {
     console.error('Error in daily fetchNodeTimingData:', error.message);
   });
 }, nodeTimingFetchInterval);
+
+// Set up periodic cleanup of stale connections
+setInterval(() => {
+  const now = Date.now();
+  
+  for (const [socketId, client] of poolMap.entries()) {
+    let shouldRemove = false;
+    let reason = '';
+    
+    // Check if the client has a lastSeen timestamp and if it's stale
+    if (client.lastSeen && (now - client.lastSeen) > poolNodeStaleThreshold) {
+      shouldRemove = true;
+      reason = `stale (last seen: ${new Date(client.lastSeen).toISOString()})`;
+    }
+    
+    // Check if the socket is disconnected
+    if (client.socket && client.socket.disconnected) {
+      shouldRemove = true;
+      reason = 'socket disconnected';
+    }
+    
+    if (shouldRemove) {
+      console.log(`Removing ${reason} connection: socket ${socketId}, machine_id: ${client.machine_id || 'unknown'}`);
+      poolMap.delete(socketId);
+      pendingTimingSockets.delete(socketId);
+    }
+  }
+}, 60000); // Run every minute
 
 // SSL configuration for Socket.IO server
 const wsServer = https.createServer({
@@ -320,14 +348,6 @@ const wsServerInternal = require('https').createServer(
 // Create WebSocket server attached to the HTTPS server to send cache updates to proxy.js
 const wssCache = new WebSocket.Server({ server: wsServerInternal });
 
-// Don't delete this
-// Set up cache update interval
-// setInterval(() => {
-//   updateCache(wss, poolMap, io).catch(error => {
-//     console.error('Error in cache update interval:', error.message);
-//   });
-// }, cacheUpdateInterval);
-
 // Handle WebSocket connections
 wssCache.on('connection', (ws) => {
   console.log('Proxy.js WebSocket connected');
@@ -375,7 +395,7 @@ wsServerInternal.listen(poolPort, () => {
 io.on('connection', (socket) => {
   console.log(`Socket.IO client ${socket.id} connected`);
 
-  const client = { socket, wsID: socket.id };
+  const client = { socket, wsID: socket.id, lastSeen: Date.now() };
   poolMap.set(socket.id, client);
   socket.emit('init', { id: socket.id });
   
@@ -396,10 +416,22 @@ io.on('connection', (socket) => {
         machineId = params.id;
       }
       
+      // Clean up any existing entries for the same machine ID (from previous connections)
+      if (machineId && machineId !== "N/A" && machineId !== null && machineId !== undefined) {
+        for (const [socketId, client] of poolMap.entries()) {
+          if (socketId !== socket.id && client.machine_id === machineId) {
+            console.log(`Removing duplicate entry for machine_id ${machineId} (socket ${socketId})`);
+            poolMap.delete(socketId);
+            pendingTimingSockets.delete(socketId);
+          }
+        }
+      }
+      
       poolMap.set(socket.id, { 
         ...existingClient, 
         ...params,
-        machine_id: machineId // Set the machine_id field
+        machine_id: machineId, // Set the machine_id field
+        lastSeen: Date.now() // Add timestamp for stale connection cleanup
       });
       console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${params.block_number}`);
       
@@ -445,6 +477,11 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`Socket.IO client ${socket.id} disconnected`);
+    const client = poolMap.get(socket.id);
+    if (client && client.machine_id) {
+      console.log(`Removing socket ${socket.id} for machine_id: ${client.machine_id}`);
+    }
     poolMap.delete(socket.id);
+    pendingTimingSockets.delete(socket.id);
   });
 });
