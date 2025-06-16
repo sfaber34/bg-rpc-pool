@@ -1,11 +1,4 @@
-const axios = require('axios');
-
-const host = process.env.HOST;
-const { spotCheckOnlyThreshold } = require('../config');
-
-// Module-level variable to store timing data
-let nodeTimingLastWeek = null;
-let lastFetchTime = null;
+const { getNodeTimingData, filterFastNodes, filterSlowNodes, spotCheckOnlyThreshold } = require('./nodeTimingUtils');
 
 /**
  * Checks if a node has both a socket ID and a valid node ID
@@ -22,26 +15,6 @@ function hasValidNodeId(client) {
 }
 
 /**
- * Fetches node timing data from the API
- * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
- * @returns {Promise<void>}
- */
-async function fetchNodeTimingData(poolMap) {
-  try {
-    const response = await axios.get(`https://${host}:3001/nodeTimingLastWeek`);
-    nodeTimingLastWeek = response.data; // Store by machine_id
-    lastFetchTime = Date.now();
-    // Log the timing data without quotes in keys
-    console.log('Node timing data fetched:');
-    Object.entries(nodeTimingLastWeek).forEach(([key, value]) => {
-      console.log(`  ${key}: ${value}`);
-    });
-  } catch (error) {
-    console.error('Error fetching node timing data:', error.message);
-  }
-}
-
-/**
  * Selects up to 3 random clients from the pool that are at the highest block number
  * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
  * @returns {Array<string>} Array of selected client socket IDs (can range in length from 0 to 3 depending on the number of clients at the highest block)
@@ -55,6 +28,9 @@ async function fetchNodeTimingData(poolMap) {
  */
 function selectRandomClients(poolMap) {
   console.log('Starting selectRandomClients with pool size:', poolMap.size);
+  
+  // Get current timing data
+  const nodeTimingLastWeek = getNodeTimingData();
   
   // Log the timing data if available
   if (nodeTimingLastWeek) {
@@ -108,19 +84,41 @@ function selectRandomClients(poolMap) {
     return [];
   }
 
-  // Find the highest block number
-  const highestBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
-  console.log('Highest block number:', highestBlock);
+  // Determine highest block from fast nodes only (if timing data is available)
+  let targetBlock;
+  let fastClientsWithBlocks = clientsWithBlocks;
+  
+  if (nodeTimingLastWeek) {
+    // Separate fast and slow nodes
+    fastClientsWithBlocks = filterFastNodes(clientsWithBlocks);
+    
+    console.log('Fast clients with valid blocks:', fastClientsWithBlocks.length);
+    
+    // If we have fast nodes, use their highest block as target
+    if (fastClientsWithBlocks.length > 0) {
+      targetBlock = Math.max(...fastClientsWithBlocks.map(client => parseInt(client.block_number)));
+      console.log('Highest block number from fast nodes:', targetBlock);
+    } else {
+      // No fast nodes available, fall back to all nodes
+      console.log('No fast nodes available, using highest block from all nodes');
+      targetBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
+      console.log('Highest block number from all nodes:', targetBlock);
+    }
+  } else {
+    // No timing data available, use highest block from all nodes
+    targetBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
+    console.log('Highest block number (no timing data):', targetBlock);
+  }
 
-  // Filter clients at the highest block
+  // Filter clients at the target block
   const highestBlockClients = clientsWithBlocks.filter(
-    client => parseInt(client.block_number) === highestBlock
+    client => parseInt(client.block_number) === targetBlock
   );
-  console.log('Clients at highest block:', highestBlockClients.length);
+  console.log('Clients at target block:', highestBlockClients.length);
 
-  // If no clients at highest block, return empty array
+  // If no clients at target block, return empty array
   if (highestBlockClients.length === 0) {
-    console.log('No clients at highest block');
+    console.log('No clients at target block');
     return [];
   }
 
@@ -130,34 +128,20 @@ function selectRandomClients(poolMap) {
   
   if (nodeTimingLastWeek) {
     // Check if all nodes are slow
-    const allNodesSlow = highestBlockClients.every(client => {
-      const timing = nodeTimingLastWeek[client.machine_id];
-      // Only consider nodes slow if timing is defined and above threshold
-      return timing !== undefined && timing > spotCheckOnlyThreshold;
-    });
+    const fastNodes = filterFastNodes(highestBlockClients);
+    const slowNodes = filterSlowNodes(highestBlockClients);
 
-    if (allNodesSlow) {
+    if (fastNodes.length === 0) {
       console.log('All nodes are slow, returning empty array');
       return [];
     }
 
-    // Identify all slow nodes
-    const slowNodes = highestBlockClients.filter(client => {
-      const timing = nodeTimingLastWeek[client.machine_id];
-      // Only consider nodes slow if timing is defined and above threshold
-      const isSlow = timing !== undefined && timing > spotCheckOnlyThreshold;
-      console.log(`Client ${client.wsID} timing: ${timing}, isSlow: ${isSlow}`);
-      return isSlow;
-    });
+    console.log('Fast nodes count:', fastNodes.length);
     console.log('Slow nodes count:', slowNodes.length);
 
-    // Create selection pool starting with non-slow nodes
-    selectionPool = selectionPool.filter(client => {
-      const timing = nodeTimingLastWeek[client.machine_id];
-      // Include if timing is undefined or timing is below or equal to threshold
-      return timing === undefined || timing <= spotCheckOnlyThreshold;
-    });
-    console.log('Selection pool after removing slow nodes:', selectionPool.length);
+    // Create selection pool starting with fast nodes
+    selectionPool = [...fastNodes];
+    console.log('Selection pool after adding fast nodes:', selectionPool.length);
 
     // If we have more than 2 slow nodes, randomly select 2 to add to the pool
     if (slowNodes.length > 2) {
@@ -196,11 +180,8 @@ function selectRandomClients(poolMap) {
 
   // Rearrange selected nodes to ensure a fast node is first
   if (nodeTimingLastWeek) {
-    // Find first fast node (timing undefined or <= threshold)
-    const fastNodeIndex = selectedNodes.findIndex(node => {
-      const timing = nodeTimingLastWeek[node.machine_id];
-      return timing === undefined || timing <= spotCheckOnlyThreshold;
-    });
+    // Find first fast node
+    const fastNodeIndex = selectedNodes.findIndex(node => filterFastNodes([node]).length > 0);
 
     if (fastNodeIndex !== -1) {
       // Move fast node to front
@@ -213,4 +194,4 @@ function selectRandomClients(poolMap) {
   return selectedNodes.map(node => node.wsID);
 }
 
-module.exports = { selectRandomClients, fetchNodeTimingData }; 
+module.exports = { selectRandomClients }; 

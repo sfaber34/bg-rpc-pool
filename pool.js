@@ -10,7 +10,8 @@ const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
-const { selectRandomClients, fetchNodeTimingData } = require('./utils/selectRandomClients');
+const { selectRandomClients } = require('./utils/selectRandomClients');
+const { fetchNodeTimingData } = require('./utils/nodeTimingUtils');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
@@ -42,7 +43,7 @@ const pendingTimingSockets = new Set(); // Track socket IDs that need timing dat
 
 // Set up daily fetch
 setInterval(() => {
-  fetchNodeTimingData(poolMap).catch(error => {
+  fetchNodeTimingData().catch(error => {
     console.error('Error in daily fetchNodeTimingData:', error.message);
   });
 }, nodeTimingFetchInterval);
@@ -418,7 +419,7 @@ io.on('connection', (socket) => {
         pendingTimingSockets.delete(socket.id);
         if (!processedTimingNodes.has(machineId)) {
           processedTimingNodes.add(machineId);
-          fetchNodeTimingData(poolMap).catch(err => {
+          fetchNodeTimingData().catch(err => {
             console.error('Error updating node timing data:', err);
           });
         }

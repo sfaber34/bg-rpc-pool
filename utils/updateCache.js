@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const { handleRequestSingle } = require('./handleRequestSingle');
 const { selectRandomClients } = require('./selectRandomClients');
+const { getNodeTimingData, isFastNode } = require('./nodeTimingUtils');
 
 // Track last known block number to avoid duplicate updates
 let lastKnownBlockNumber = null;
@@ -85,15 +86,43 @@ function broadcastUpdate(wssCache, method, params, value, timestamp = Date.now()
 // Update cache based on pool map
 async function updateCache(wssCache, poolMap, io) {
   try {
-    // Find the largest block number from all nodes in the pool
+    // Get current timing data
+    const nodeTimingLastWeek = getNodeTimingData();
+    
+    // Find the largest block number from fast nodes only (if timing data available)
     let maxBlockNumber = null;
+    let fastNodesExist = false;
 
     for (const [nodeId, nodeData] of poolMap.entries()) {
       const blockNumber = nodeData.block_number;
       if (isValidBlockNumber(blockNumber)) {
         const numBlockNumber = Number(blockNumber);
-        if (maxBlockNumber === null || numBlockNumber > maxBlockNumber) {
-          maxBlockNumber = numBlockNumber;
+        
+        // Check if this is a fast node (or if no timing data available, consider all nodes)
+        const isNodeFast = isFastNode(nodeData);
+        if (isNodeFast) {
+          fastNodesExist = true;
+        }
+        
+        // Only consider this node if it's fast (or if no timing data available)
+        if (isNodeFast || !nodeTimingLastWeek) {
+          if (maxBlockNumber === null || numBlockNumber > maxBlockNumber) {
+            maxBlockNumber = numBlockNumber;
+          }
+        }
+      }
+    }
+
+    // If no fast nodes exist but timing data is available, fall back to all nodes
+    if (nodeTimingLastWeek && !fastNodesExist) {
+      console.log('No fast nodes available, falling back to all nodes for cache update');
+      for (const [nodeId, nodeData] of poolMap.entries()) {
+        const blockNumber = nodeData.block_number;
+        if (isValidBlockNumber(blockNumber)) {
+          const numBlockNumber = Number(blockNumber);
+          if (maxBlockNumber === null || numBlockNumber > maxBlockNumber) {
+            maxBlockNumber = numBlockNumber;
+          }
         }
       }
     }
