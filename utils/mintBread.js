@@ -1,10 +1,12 @@
-const { createWalletClient, http } = require("viem");
+const { createWalletClient, http, isAddress } = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
 const { baseSepolia } = require("viem/chains");
 const path = require("path");
 const dotenv = require("dotenv");
 const { getBreadTable } = require('../database_scripts/getBreadTable');
 const { resetBreadTable } = require('../database_scripts/resetBreadTable');
+const { baseSepoliaPublicClient } = require('./baseSepoliaPublicClient');
+const { mainnetPublicClient } = require('./mainnetPublicClient');
 
 // const __dirname = path.dirname(__filename);
 
@@ -190,6 +192,69 @@ const contractAbi = [
   },
 ];
 
+// Pre-flight check functions
+async function validateAndResolveAddresses(addresses) {
+  const resolvedAddresses = [];
+  const validAddresses = [];
+  const failedAddresses = [];
+  
+  for (let i = 0; i < addresses.length; i++) {
+    const addr = addresses[i];
+    try {
+      if (addr.endsWith('.eth')) {
+        // Resolve ENS name using Ethereum mainnet
+        const resolved = await mainnetPublicClient.getEnsAddress({ name: addr });
+        if (!resolved) {
+          console.error(`Could not resolve ENS name: ${addr}`);
+          failedAddresses.push({ index: i, address: addr, reason: 'ENS resolution failed' });
+          continue;
+        }
+        resolvedAddresses.push(resolved);
+        validAddresses.push(i);
+      } else {
+        // Validate address format
+        if (!isAddress(addr)) {
+          console.error(`Invalid address format: ${addr}`);
+          failedAddresses.push({ index: i, address: addr, reason: 'Invalid address format' });
+          continue;
+        }
+        resolvedAddresses.push(addr);
+        validAddresses.push(i);
+      }
+    } catch (error) {
+      console.error(`Error validating address ${addr}:`, error.message);
+      failedAddresses.push({ index: i, address: addr, reason: error.message });
+    }
+  }
+  
+  return { resolvedAddresses, validAddresses, failedAddresses };
+}
+
+async function checkAddressesExist(addresses) {
+  const validAddresses = [];
+  const failedAddresses = [];
+  
+  for (let i = 0; i < addresses.length; i++) {
+    const addr = addresses[i];
+    try {
+      const code = await baseSepoliaPublicClient.getBytecode({ address: addr });
+      const balance = await baseSepoliaPublicClient.getBalance({ address: addr });
+      
+      // Check if it's a valid address (has been used or is a contract)
+      if (code === '0x' && balance === 0n) {
+        console.warn(`Address ${addr} appears to be unused (no balance or code)`);
+        // For now, we'll still consider these valid but warn
+      }
+      validAddresses.push(i);
+    } catch (error) {
+      console.error(`Could not check address ${addr}:`, error.message);
+      failedAddresses.push({ index: i, address: addr, reason: error.message });
+    }
+  }
+  
+  return { validAddresses, failedAddresses };
+}
+
 async function mintBread() {
   try {
     const key = process.env.RPC_BREAD_MINTER_KEY;
@@ -207,8 +272,42 @@ async function mintBread() {
       return;
     }
 
+    console.log('Running pre-flight checks...');
+    
+    // 1. Validate and resolve addresses (ENS support)
+    const addressValidation = await validateAndResolveAddresses(addresses);
+    
+    if (addressValidation.failedAddresses.length > 0) {
+      console.log(`${addressValidation.failedAddresses.length} addresses failed validation:`, 
+        addressValidation.failedAddresses.map(f => `${f.address}: ${f.reason}`));
+    }
+    
+    if (addressValidation.resolvedAddresses.length === 0) {
+      console.log("No valid addresses to mint to");
+      return;
+    }
+    
+    // 2. Check address existence for resolved addresses
+    const existenceCheck = await checkAddressesExist(addressValidation.resolvedAddresses);
+    
+    // Filter to only include addresses that passed both checks
+    const finalValidIndices = addressValidation.validAddresses.filter(i => 
+      existenceCheck.validAddresses.includes(addressValidation.validAddresses.indexOf(i))
+    );
+    
+    const finalAddresses = finalValidIndices.map(i => addressValidation.resolvedAddresses[addressValidation.validAddresses.indexOf(i)]);
+    const finalAmounts = finalValidIndices.map(i => amounts[i]);
+    const originalAddresses = finalValidIndices.map(i => addresses[i]); // Keep track of original addresses for database reset
+    
+    if (finalAddresses.length === 0) {
+      console.log("No addresses passed all validation checks");
+      return;
+    }
+    
+    console.log(`Pre-flight checks passed for ${finalAddresses.length}/${addresses.length} addresses.`);
+
     // Scale each amount to 18 decimals
-    const scaledAmounts = amounts.map(amount => BigInt(amount) * 10n ** 18n);
+    const scaledAmounts = finalAmounts.map(amount => BigInt(amount) * 10n ** 18n);
 
     const account = privateKeyToAccount(key);
     const baseWalletClient = createWalletClient({
@@ -221,31 +320,22 @@ async function mintBread() {
       address: breadContractAddress,
       abi: contractAbi,
       functionName: "batchMint",
-      args: [addresses, scaledAmounts],
+      args: [finalAddresses, scaledAmounts],
     });
 
     console.log("🍞 Minted Bread");
     console.log("Transaction hash:", hash);
-    console.log(`Minted to ${addresses.length} addresses:`, addresses.map((addr, i) => `${addr}: ${amounts[i]}`));
+    console.log(`Minted to ${finalAddresses.length} addresses:`, finalAddresses.map((addr, i) => `${addr}: ${finalAmounts[i]}`));
 
-    // Reset the bread table after successful minting
-    await resetBreadTable();
+    // Reset the bread table only for addresses that were successfully minted to
+    await resetBreadTable(originalAddresses);
+    
+    if (finalAddresses.length < addresses.length) {
+      console.log(`${addresses.length - finalAddresses.length} addresses were skipped and their pending bread remains in the database`);
+    }
   } catch (error) {
     console.error("Error in mintBread:", error);
   }
 }
-
-// async function main() {
-//   try {
-//     await mintBread(
-//       ["0x4dBd522584027518dF620479947aB110d8C998af", "0x33ED4F7619BFa162eAC92fc165517a57185Cc717"],
-//       [1, 2]
-//     );
-//   } catch (e) {
-//     console.error(e);
-//   }
-// }
-
-// main();
 
 module.exports = { mintBread };

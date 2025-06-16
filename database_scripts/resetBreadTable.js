@@ -9,7 +9,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 // Path to the RDS CA bundle
 const RDS_CA_BUNDLE_PATH = '/home/ubuntu/shared/rds-ca-bundle.pem';
 
-async function resetBreadTable() {
+async function resetBreadTable(addressesToReset = null) {
   try {
     if (!process.env.RDS_SECRET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.DB_HOST) {
       console.error('Required environment variables are missing. Please check your .env file.');
@@ -56,9 +56,21 @@ async function resetBreadTable() {
 
     const client = await pool.connect();
     try {
-      const result = await client.query('UPDATE bread SET pending_bread = 0 WHERE pending_bread > 0');
+      let result;
       
-      console.log(`Reset pending bread for ${result.rowCount} addresses`);
+      if (addressesToReset && addressesToReset.length > 0) {
+        // Reset only specific addresses
+        const placeholders = addressesToReset.map((_, index) => `$${index + 1}`).join(', ');
+        const query = `UPDATE bread SET pending_bread = 0 WHERE address IN (${placeholders}) AND pending_bread > 0`;
+        result = await client.query(query, addressesToReset);
+        
+        console.log(`Reset pending bread for ${result.rowCount} specific addresses`);
+      } else {
+        // Reset all pending bread (original behavior)
+        result = await client.query('UPDATE bread SET pending_bread = 0 WHERE pending_bread > 0');
+        
+        console.log(`Reset pending bread for ${result.rowCount} addresses`);
+      }
     } finally {
       client.release();
       await pool.end();
