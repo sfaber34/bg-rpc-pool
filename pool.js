@@ -456,21 +456,21 @@ io.on('connection', (socket) => {
 
 // New interval function that implements the 10-cycle logic
 // DON't DELETE THIS
-// setInterval(async () => {
-//   await processNodesForBread(poolMap);
+setInterval(async () => {
+  await processNodesForBread(poolMap);
   
-//   breadProcessingCounter++;
+  breadProcessingCounter++;
   
-//   // Call mintBread every 10th time
-//   if (breadProcessingCounter >= 10) {
-//     console.log('🍞 10 cycles completed, calling mintBread()');
-//     try {
-//       await mintBread();
-//     } catch (error) {
-//       console.error('Error in mintBread:', error);
-//     }
-//     breadProcessingCounter = 0; // Reset counter
-//   } else {
-//     console.log(`🍞 Bread processing cycle ${breadProcessingCounter}/10`);
-//   }
-// }, 10000);
+  // Call mintBread every 10th time
+  if (breadProcessingCounter >= 10) {
+    console.log('🍞 10 cycles completed, calling mintBread()');
+    try {
+      await mintBread();
+    } catch (error) {
+      console.error('Error in mintBread:', error);
+    }
+    breadProcessingCounter = 0; // Reset counter
+  } else {
+    console.log(`🍞 Bread processing cycle ${breadProcessingCounter}/10`);
+  }
+}, 10000);
