@@ -17,6 +17,7 @@ const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
 const { broadcastUpdate } = require('./utils/updateCache');
 const { getBlockNumberMode } = require('./utils/getBlockNumberMode');
+const { sendTelegramAlert } = require('./utils/telegramUtils');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold } = require('./config');
 
@@ -439,6 +440,14 @@ io.on('connection', (socket) => {
       // Calculate and log the mode of block numbers
       const mode = getBlockNumberMode(poolMap);
       console.log(`Mode of block numbers in pool: ${mode}`);
+      
+      // Check for significant block number deviation
+      if (params.block_number && mode) {
+        const blockDiff = parseInt(params.block_number) - parseInt(mode);
+        if (blockDiff > 2) {
+          sendTelegramAlert(`\n------------------------------------------\n🚨 Node ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode})`);
+        }
+      }
       
       // Update cache immediately when a node checks in with new block number.
       if (params.block_number) {
