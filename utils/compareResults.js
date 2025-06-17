@@ -1,3 +1,5 @@
+const { sendTelegramAlert } = require('./telegramUtils');
+
 /**
  * Compares RPC responses from multiple nodes to check for consensus and identify mismatches
  * @param {Map<string, Object>} responseMap - Map of client IDs to their responses
@@ -79,6 +81,10 @@ function compareResults(responseMap, poolMap) {
       result.mismatchedNode = poolMapEntry?.id || 'unknown';
       result.mismatchedOwner = poolMapEntry?.owner || 'unknown';
       result.mismatchedResults = [`result: ${JSON.stringify(mismatchedResponse.data)}`];
+      
+      // Send Telegram alert for simple value mismatch
+      const alertMessage = `\n------------------------------------------\n🚨 RPC Response Mismatch Detected!\n\nMismatched Node: ${result.mismatchedNode}\nNode Owner: ${result.mismatchedOwner}\nMismatch Details: ${result.mismatchedResults.join('\n')}`;
+      sendTelegramAlert(alertMessage);
     } else {
       result.resultsMatch = true;
     }
@@ -143,6 +149,10 @@ function compareResults(responseMap, poolMap) {
     result.mismatchedResults = Array.from(keyMismatches.entries()).map(([key, values]) => 
       `key "${key}": ${Array.from(values).join(' vs ')}`
     );
+
+    // Send Telegram alert for object mismatch
+    const alertMessage = `\n------------------------------------------\n🚨 RPC Response Mismatch Detected!\n\nMismatched Node: ${result.mismatchedNode}\nNode Owner: ${result.mismatchedOwner}\nMismatch Details:\n${result.mismatchedResults.join('\n')}`;
+    sendTelegramAlert(alertMessage);
   } else {
     result.resultsMatch = true;
   }
