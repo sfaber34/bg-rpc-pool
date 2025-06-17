@@ -16,6 +16,7 @@ const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
 const { broadcastUpdate } = require('./utils/updateCache');
+const { getBlockNumberMode } = require('./utils/getBlockNumberMode');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold } = require('./config');
 
@@ -434,6 +435,10 @@ io.on('connection', (socket) => {
         lastSeen: Date.now() // Add timestamp for stale connection cleanup
       });
       console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${params.block_number}`);
+
+      // Calculate and log the mode of block numbers
+      const mode = getBlockNumberMode(poolMap);
+      console.log(`Mode of block numbers in pool: ${mode}`);
       
       // Update cache immediately when a node checks in with new block number.
       if (params.block_number) {
