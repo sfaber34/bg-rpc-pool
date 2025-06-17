@@ -4,13 +4,14 @@ const { sendTelegramAlert } = require('./telegramUtils');
  * Compares RPC responses from multiple nodes to check for consensus and identify mismatches
  * @param {Map<string, Object>} responseMap - Map of client IDs to their responses
  * @param {Map<string, Object>} poolMap - Map of client IDs to their node information
+ * @param {string} method - The RPC method that was called
  * @returns {Object} Result object containing:
  *   - resultsMatch: boolean indicating if all responses match
  *   - mismatchedNode: ID of the node with mismatched response
  *   - mismatchedOwner: Owner of the node with mismatched response
  *   - mismatchedResults: Array of mismatched results with details
  */
-function compareResults(responseMap, poolMap) {
+function compareResults(responseMap, poolMap, method = 'unknown') {
   // Initialize return object
   const result = {
     resultsMatch: false,
@@ -83,7 +84,7 @@ function compareResults(responseMap, poolMap) {
       result.mismatchedResults = [`result: ${JSON.stringify(mismatchedResponse.data)}`];
       
       // Send Telegram alert for simple value mismatch
-      const alertMessage = `\n------------------------------------------\n🚨 RPC Response Mismatch Detected!\n\nMismatched Node: ${result.mismatchedNode}\nNode Owner: ${result.mismatchedOwner}\nMismatch Details: ${result.mismatchedResults.join('\n')}`;
+      const alertMessage = `\n------------------------------------------\n🚨 RPC Response Mismatch Detected!\n\nMethod: ${method}\nMismatched Node: ${result.mismatchedNode}\nNode Owner: ${result.mismatchedOwner}\nMismatch Details: ${result.mismatchedResults.join('\n')}`;
       sendTelegramAlert(alertMessage);
     } else {
       result.resultsMatch = true;
@@ -151,7 +152,7 @@ function compareResults(responseMap, poolMap) {
     );
 
     // Send Telegram alert for object mismatch
-    const alertMessage = `\n------------------------------------------\n🚨 RPC Response Mismatch Detected!\n\nMismatched Node: ${result.mismatchedNode}\nNode Owner: ${result.mismatchedOwner}\nMismatch Details:\n${result.mismatchedResults.join('\n')}`;
+    const alertMessage = `\n------------------------------------------\n🚨 RPC Response Mismatch Detected!\n\nMethod: ${method}\nMismatched Node: ${result.mismatchedNode}\nNode Owner: ${result.mismatchedOwner}\nMismatch Details:\n${result.mismatchedResults.join('\n')}`;
     sendTelegramAlert(alertMessage);
   } else {
     result.resultsMatch = true;

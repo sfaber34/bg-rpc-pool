@@ -181,7 +181,7 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
         if (pendingResponses === 0) {
           console.log('👍 All responses received');
 
-          const { resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults } = compareResults(responseMap, poolMap);
+          const { resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults } = compareResults(responseMap, poolMap, rpcRequest.method);
           console.log('Results match:', resultsMatch);
           console.log('Mismatched node:', mismatchedNode);
           console.log('Mismatched owner:', mismatchedOwner);

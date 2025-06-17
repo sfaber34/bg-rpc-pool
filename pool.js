@@ -302,6 +302,9 @@ const wsServerInternal = require('https').createServer(
             return;
           } else if (selectedClients.length < 3) {
             result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
+          } else if (rpcRequest.method === 'eth_blockNumber') {
+            console.log(`Using handleRequestSingle for eth_blockNumber method`);
+            result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
           } else {
             const useSetHandler = Math.floor(Math.random() * requestSetChance) === 0;
             
@@ -529,10 +532,6 @@ io.on('connection', (socket) => {
       
       poolMap.set(socket.id, clientData);
       console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${isSuspicious ? 'SUSPICIOUS' : params.block_number}, suspicious: ${isSuspicious}`);
-
-      // Calculate and log the mode of block numbers (excluding suspicious nodes)
-      const newMode = getBlockNumberMode(poolMap);
-      console.log(`Mode of block numbers in pool: ${newMode}`);
       
       // Update cache immediately when a non-suspicious node checks in with new block number.
       if (params.block_number && !isSuspicious) {
