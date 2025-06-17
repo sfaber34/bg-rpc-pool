@@ -151,7 +151,11 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             if (client.owner) {
               addPendingPoints(client.owner, 10);
             }
-            resolve({ status: 'success', data: response.result });
+            resolve({ 
+              status: 'success', 
+              data: response.result,
+              respondingClientId: clientId // Include the responding client ID for cache validation
+            });
           } else {
             // Award 5 points to subsequent successful responders
             if (client.owner) {

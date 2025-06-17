@@ -5,6 +5,7 @@
  */
 function getBlockNumberMode(poolMap) {
   const blockNumbers = Array.from(poolMap.values())
+    .filter(client => !client.suspicious && client.block_number !== 'SUSPICIOUS') // Exclude suspicious nodes
     .map(client => client.block_number)
     .filter(num => num != null);
   

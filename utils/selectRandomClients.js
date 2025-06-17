@@ -51,9 +51,14 @@ function selectRandomClients(poolMap) {
                            client.machine_id &&
                            client.machine_id !== "N/A" &&
                            client.machine_id !== null &&
-                           client.machine_id !== undefined;
+                           client.machine_id !== undefined &&
+                           !client.suspicious; // Exclude suspicious nodes
     if (!hasRequiredProps) {
-      console.log(`Client ${client.wsID} skipped: missing required properties`);
+      if (client.suspicious) {
+        console.log(`Client ${client.wsID} skipped: marked as suspicious`);
+      } else {
+        console.log(`Client ${client.wsID} skipped: missing required properties`);
+      }
     }
     return hasRequiredProps;
   });

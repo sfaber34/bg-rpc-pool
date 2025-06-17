@@ -95,6 +95,11 @@ async function updateCache(wssCache, poolMap, io) {
 
     for (const [nodeId, nodeData] of poolMap.entries()) {
       const blockNumber = nodeData.block_number;
+      // Skip suspicious nodes when determining cache block number
+      if (nodeData.suspicious || blockNumber === 'SUSPICIOUS') {
+        continue;
+      }
+      
       if (isValidBlockNumber(blockNumber)) {
         const numBlockNumber = Number(blockNumber);
         
@@ -113,11 +118,16 @@ async function updateCache(wssCache, poolMap, io) {
       }
     }
 
-    // If no fast nodes exist but timing data is available, fall back to all nodes
+    // If no fast nodes exist but timing data is available, fall back to all nodes (excluding suspicious)
     if (nodeTimingLastWeek && !fastNodesExist) {
-      console.log('No fast nodes available, falling back to all nodes for cache update');
+      console.log('No fast nodes available, falling back to all non-suspicious nodes for cache update');
       for (const [nodeId, nodeData] of poolMap.entries()) {
         const blockNumber = nodeData.block_number;
+        // Skip suspicious nodes
+        if (nodeData.suspicious || blockNumber === 'SUSPICIOUS') {
+          continue;
+        }
+        
         if (isValidBlockNumber(blockNumber)) {
           const numBlockNumber = Number(blockNumber);
           if (maxBlockNumber === null || numBlockNumber > maxBlockNumber) {

@@ -42,6 +42,7 @@ const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
 const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
 const pendingTimingSockets = new Set(); // Track socket IDs that need timing data once they get a valid node ID
+const suspiciousNodes = new Set(); // Track nodes reporting suspicious block numbers
 
 // Set up daily fetch
 setInterval(() => {
@@ -74,6 +75,15 @@ setInterval(() => {
       console.log(`Removing ${reason} connection: socket ${socketId}, machine_id: ${client.machine_id || 'unknown'}`);
       poolMap.delete(socketId);
       pendingTimingSockets.delete(socketId);
+      suspiciousNodes.delete(socketId);
+    }
+  }
+  
+  // Clean up suspicious nodes that are no longer in the pool
+  for (const suspiciousSocketId of suspiciousNodes) {
+    if (!poolMap.has(suspiciousSocketId)) {
+      console.log(`Removing disconnected node from suspicious list: ${suspiciousSocketId}`);
+      suspiciousNodes.delete(suspiciousSocketId);
     }
   }
 }, 60000); // Run every minute
@@ -206,6 +216,44 @@ const wsServerInternal = require('https').createServer(
     return;
   }
 
+  if (req.url === '/suspiciousNodes' && req.method === 'GET') {
+    try {
+      const suspiciousNodesData = Array.from(suspiciousNodes).map(socketId => {
+        const client = poolMap.get(socketId);
+        return {
+          socketId,
+          nodeId: client?.id || 'unknown',
+          machineId: client?.machine_id || 'unknown',
+          owner: client?.owner || 'unknown',
+          blockNumber: client?.block_number || 'unknown',
+          lastSeen: client?.lastSeen ? new Date(client.lastSeen).toISOString() : 'unknown'
+        };
+      });
+      
+      const response = JSON.stringify({
+        suspiciousNodesCount: suspiciousNodes.size,
+        suspiciousNodes: suspiciousNodesData
+      }, null, 2);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(response)
+      });
+      res.end(response);
+    } catch (error) {
+      console.error('Error in /suspiciousNodes endpoint:', error);
+      const errorResponse = JSON.stringify({
+        error: 'Internal server error',
+        message: error.message
+      });
+      res.writeHead(500, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(errorResponse)
+      });
+      res.end(errorResponse);
+    }
+    return;
+  }
+
   if (req.url === '/requestPool' && req.method === 'POST') {
     let body = '';
     
@@ -274,11 +322,21 @@ const wsServerInternal = require('https').createServer(
               id: rpcRequest.id
             }));
 
+            // Check if the responding node is suspicious before caching
+            let shouldCache = true;
+            if (result.respondingClientId) {
+              const respondingClient = poolMap.get(result.respondingClientId);
+              if (respondingClient && respondingClient.suspicious) {
+                console.log(`🚫 Not caching response from suspicious node: ${respondingClient.id || result.respondingClientId}`);
+                shouldCache = false;
+              }
+            }
+
             // Check if method is cacheable and block number is a hex value
             const method = rpcRequest.method;
             console.log(`💾 Method: ${method}`);
-            if (cacheableMethods.has(method)) {
-              console.log(`💾 Is cacheable method`);
+            if (cacheableMethods.has(method) && shouldCache) {
+              console.log(`💾 Is cacheable method and responding node is not suspicious`);
               const blockNumberPosition = cacheableMethods.get(method);
               const params = rpcRequest.params || [];
               
@@ -301,6 +359,8 @@ const wsServerInternal = require('https').createServer(
                   broadcastUpdate(wssCache, method, params, result.data);
                 }
               }
+            } else if (!shouldCache) {
+              console.log(`🚫 Skipping cache for response from suspicious node`);
             }
           } else {
             res.statusCode = 500;
@@ -425,32 +485,57 @@ io.on('connection', (socket) => {
             console.log(`Removing duplicate entry for machine_id ${machineId} (socket ${socketId})`);
             poolMap.delete(socketId);
             pendingTimingSockets.delete(socketId);
+            suspiciousNodes.delete(socketId);
           }
         }
       }
       
-      poolMap.set(socket.id, { 
-        ...existingClient, 
-        ...params,
-        machine_id: machineId, // Set the machine_id field
-        lastSeen: Date.now() // Add timestamp for stale connection cleanup
-      });
-      console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${params.block_number}`);
-
-      // Calculate and log the mode of block numbers
+      // Calculate the mode before updating the pool to check for suspicious activity
       const mode = getBlockNumberMode(poolMap);
-      console.log(`Mode of block numbers in pool: ${mode}`);
+      let isSuspicious = false;
       
-      // Check for significant block number deviation
+      // Check for significant block number deviation and mark as suspicious
       if (params.block_number && mode) {
         const blockDiff = parseInt(params.block_number) - parseInt(mode);
         if (blockDiff > 2) {
-          sendTelegramAlert(`\n------------------------------------------\n🚨 Node ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode})`);
+          console.log(`🚨 Suspicious node detected: ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode})`);
+          sendTelegramAlert(`\n------------------------------------------\n🚨 Suspicious node detected: ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode}). Node marked as suspicious and excluded from routing.`);
+          suspiciousNodes.add(socket.id);
+          isSuspicious = true;
+        } else {
+          // Remove from suspicious list if block number is now reasonable
+          if (suspiciousNodes.has(socket.id)) {
+            console.log(`✅ Node ${params.id || socket.id} block number ${params.block_number} is now within acceptable range. Removing from suspicious list.`);
+            suspiciousNodes.delete(socket.id);
+          }
         }
       }
       
-      // Update cache immediately when a node checks in with new block number.
-      if (params.block_number) {
+      // Update pool map with client info, but mark suspicious nodes
+      const clientData = { 
+        ...existingClient, 
+        ...params,
+        machine_id: machineId, // Set the machine_id field
+        lastSeen: Date.now(), // Add timestamp for stale connection cleanup
+        suspicious: isSuspicious // Mark if node is suspicious
+      };
+      
+      // If the node is suspicious, don't update their block number in the pool
+      // This prevents them from influencing routing decisions
+      if (isSuspicious) {
+        clientData.block_number = 'SUSPICIOUS';
+        console.log(`⚠️ Not updating block number for suspicious node ${params.id || socket.id}`);
+      }
+      
+      poolMap.set(socket.id, clientData);
+      console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${isSuspicious ? 'SUSPICIOUS' : params.block_number}, suspicious: ${isSuspicious}`);
+
+      // Calculate and log the mode of block numbers (excluding suspicious nodes)
+      const newMode = getBlockNumberMode(poolMap);
+      console.log(`Mode of block numbers in pool: ${newMode}`);
+      
+      // Update cache immediately when a non-suspicious node checks in with new block number.
+      if (params.block_number && !isSuspicious) {
         updateCache(wssCache, poolMap, io).catch(error => {
           console.error('Error updating cache after checkin:', error.message);
         });
@@ -497,5 +582,6 @@ io.on('connection', (socket) => {
     }
     poolMap.delete(socket.id);
     pendingTimingSockets.delete(socket.id);
+    suspiciousNodes.delete(socket.id);
   });
 });
