@@ -8,73 +8,11 @@ const { resetBreadTable } = require('../database_scripts/resetBreadTable');
 const { baseSepoliaPublicClient } = require('./baseSepoliaPublicClient');
 const { mainnetPublicClient } = require('./mainnetPublicClient');
 const { breadContractAbi } = require('./breadContractAbi');
+const { validateAndResolveAddresses, checkAddressesExist } = require('./addressUtils');
 
 // const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
-
-// Pre-flight check functions
-async function validateAndResolveAddresses(addresses) {
-  const resolvedAddresses = [];
-  const validAddresses = [];
-  const failedAddresses = [];
-  
-  for (let i = 0; i < addresses.length; i++) {
-    const addr = addresses[i];
-    try {
-      if (addr.endsWith('.eth')) {
-        // Resolve ENS name using Ethereum mainnet
-        const resolved = await mainnetPublicClient.getEnsAddress({ name: addr });
-        if (!resolved) {
-          console.error(`Could not resolve ENS name: ${addr}`);
-          failedAddresses.push({ index: i, address: addr, reason: 'ENS resolution failed' });
-          continue;
-        }
-        resolvedAddresses.push(resolved);
-        validAddresses.push(i);
-      } else {
-        // Validate address format
-        if (!isAddress(addr)) {
-          console.error(`Invalid address format: ${addr}`);
-          failedAddresses.push({ index: i, address: addr, reason: 'Invalid address format' });
-          continue;
-        }
-        resolvedAddresses.push(addr);
-        validAddresses.push(i);
-      }
-    } catch (error) {
-      console.error(`Error validating address ${addr}:`, error.message);
-      failedAddresses.push({ index: i, address: addr, reason: error.message });
-    }
-  }
-  
-  return { resolvedAddresses, validAddresses, failedAddresses };
-}
-
-async function checkAddressesExist(addresses) {
-  const validAddresses = [];
-  const failedAddresses = [];
-  
-  for (let i = 0; i < addresses.length; i++) {
-    const addr = addresses[i];
-    try {
-      const code = await baseSepoliaPublicClient.getBytecode({ address: addr });
-      const balance = await baseSepoliaPublicClient.getBalance({ address: addr });
-      
-      // Check if it's a valid address (has been used or is a contract)
-      if (code === '0x' && balance === 0n) {
-        console.warn(`Address ${addr} appears to be unused (no balance or code)`);
-        // For now, we'll still consider these valid but warn
-      }
-      validAddresses.push(i);
-    } catch (error) {
-      console.error(`Could not check address ${addr}:`, error.message);
-      failedAddresses.push({ index: i, address: addr, reason: error.message });
-    }
-  }
-  
-  return { validAddresses, failedAddresses };
-}
 
 async function mintBread() {
   try {
