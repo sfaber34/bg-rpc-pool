@@ -9,7 +9,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 // Path to the RDS CA bundle
 const RDS_CA_BUNDLE_PATH = '/home/ubuntu/shared/rds-ca-bundle.pem';
 
-async function resetBreadTable(addressesToReset = null) {
+async function subtractBreadTable(addressAmounts) {
   try {
     if (!process.env.RDS_SECRET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.DB_HOST) {
       console.error('Required environment variables are missing. Please check your .env file.');
@@ -56,28 +56,23 @@ async function resetBreadTable(addressesToReset = null) {
 
     const client = await pool.connect();
     try {
-      let result;
-      
-      if (addressesToReset && addressesToReset.length > 0) {
-        // Reset only specific addresses
-        const placeholders = addressesToReset.map((_, index) => `$${index + 1}`).join(', ');
-        const query = `UPDATE bread SET pending_bread = 0 WHERE address IN (${placeholders}) AND pending_bread > 0`;
-        result = await client.query(query, addressesToReset);
-        
-        console.log(`Reset pending bread for ${result.rowCount} specific addresses`);
-      } else {
-        // Reset all pending bread (original behavior)
-        result = await client.query('UPDATE bread SET pending_bread = 0 WHERE pending_bread > 0');
-        
-        console.log(`Reset pending bread for ${result.rowCount} addresses`);
+      // Subtract pending bread for each address
+      for (const { address, amount } of addressAmounts) {
+        await client.query(`
+          UPDATE bread 
+          SET pending_bread = GREATEST(0, pending_bread - $2)
+          WHERE address = $1
+        `, [address, amount]);
       }
+      
+      console.log(`Subtracted bread amounts for ${addressAmounts.length} addresses`);
     } finally {
       client.release();
       await pool.end();
     }
   } catch (error) {
-    console.error('Error resetting bread table:', error);
+    console.error('Error subtracting from bread table:', error);
   }
 }
 
-module.exports = { resetBreadTable }; 
+module.exports = { subtractBreadTable }; 

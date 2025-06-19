@@ -4,11 +4,10 @@ const { baseSepolia } = require("viem/chains");
 const path = require("path");
 const dotenv = require("dotenv");
 const { getBreadTable } = require('../database_scripts/getBreadTable');
-const { resetBreadTable } = require('../database_scripts/resetBreadTable');
-const { baseSepoliaPublicClient } = require('./baseSepoliaPublicClient');
-const { mainnetPublicClient } = require('./mainnetPublicClient');
+const { subtractBreadTable } = require('../database_scripts/subtractBreadTable');
 const { breadContractAbi } = require('./breadContractAbi');
 const { validateAndResolveAddresses, checkAddressesExist } = require('./addressUtils');
+const { baseSepoliaPublicClient } = require('./baseSepoliaPublicClient');
 
 // const __dirname = path.dirname(__filename);
 
@@ -62,11 +61,67 @@ async function mintBread() {
       console.log("No addresses passed all validation checks");
       return;
     }
+
+    // 3. Check remaining mint amounts from contract
+    console.log('Checking remaining mint amounts...');
     
-    console.log(`Pre-flight checks passed for ${finalAddresses.length}/${addresses.length} addresses.`);
+    const adjustedAmounts = [];
+    const addressesToMint = [];
+    const adjustedData = []; // For database updates
+    
+    for (let i = 0; i < finalAddresses.length; i++) {
+      const address = finalAddresses[i];
+      const requestedAmount = finalAmounts[i];
+      
+      try {
+        const remainingMintAmount = await baseSepoliaPublicClient.readContract({
+          address: breadContractAddress,
+          abi: breadContractAbi,
+          functionName: 'getRemainingMintAmount',
+          args: [address],
+        });
+        
+        // Convert from wei to regular units for comparison (contract returns in wei)
+        const remainingAmount = Number(remainingMintAmount) / (10 ** 18);
+        const amountToMint = Math.min(requestedAmount, remainingAmount);
+        
+        if (amountToMint > 0) {
+          addressesToMint.push(address);
+          adjustedAmounts.push(amountToMint);
+          adjustedData.push({ address: originalAddresses[i], amount: amountToMint });
+          
+          if (amountToMint < requestedAmount) {
+            console.log(`Address ${address}: requested ${requestedAmount}, but only ${remainingAmount} available. Minting ${amountToMint}`);
+          }
+        } else {
+          console.log(`Address ${address}: no mint capacity available (${remainingAmount} remaining)`);
+          // Don't add to mint list, but track for database update
+          adjustedData.push({ address: originalAddresses[i], amount: 0 });
+        }
+        
+      } catch (error) {
+        console.log(`Failed to check remaining mint amount for ${address}:`, error.message);
+        // Skip this address
+      }
+    }
+    
+    if (addressesToMint.length === 0) {
+      console.log("No addresses have remaining mint capacity");
+      return;
+    }
+    
+    console.log(`Mint capacity check passed for ${addressesToMint.length}/${finalAddresses.length} addresses.`);
+    
+    // Update database to subtract the amounts we're about to mint
+    const subtractionsToMake = adjustedData.filter(item => item.amount > 0);
+    if (subtractionsToMake.length > 0) {
+      await subtractBreadTable(subtractionsToMake);
+    }
+    
+    console.log(`Pre-flight checks passed for ${addressesToMint.length}/${addresses.length} addresses.`);
 
     // Scale each amount to 18 decimals
-    const scaledAmounts = finalAmounts.map(amount => BigInt(amount) * 10n ** 18n);
+    const scaledAmounts = adjustedAmounts.map(amount => BigInt(Math.floor(amount * (10 ** 18))));
 
     const account = privateKeyToAccount(key);
     const baseWalletClient = createWalletClient({
@@ -79,18 +134,17 @@ async function mintBread() {
       address: breadContractAddress,
       abi: breadContractAbi,
       functionName: "batchMint",
-      args: [finalAddresses, scaledAmounts],
+      args: [addressesToMint, scaledAmounts],
     });
 
     console.log("🍞 Minted Bread");
     console.log("Transaction hash:", hash);
-    console.log(`Minted to ${finalAddresses.length} addresses:`, finalAddresses.map((addr, i) => `${addr}: ${finalAmounts[i]}`));
+    console.log(`Minted to ${addressesToMint.length} addresses:`, addressesToMint.map((addr, i) => `${addr}: ${adjustedAmounts[i]}`));
 
-    // Reset the bread table only for addresses that were successfully minted to
-    await resetBreadTable(originalAddresses);
+    // No need to reset bread table since we already subtracted the minted amounts
     
-    if (finalAddresses.length < addresses.length) {
-      console.log(`${addresses.length - finalAddresses.length} addresses were skipped and their pending bread remains in the database`);
+    if (addressesToMint.length < addresses.length) {
+      console.log(`${addresses.length - addressesToMint.length} addresses were skipped and their pending bread remains in the database`);
     }
   } catch (error) {
     console.error("Error in mintBread:", error);

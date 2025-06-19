@@ -195,6 +195,15 @@ const breadContractAbi = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  {
+    inputs: [
+      { internalType: "address", name: "user", type: "address" },
+    ],
+    name: "getRemainingMintAmount",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ];
 
 module.exports = { breadContractAbi }; 

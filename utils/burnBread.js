@@ -4,7 +4,7 @@ const { baseSepolia } = require("viem/chains");
 const path = require("path");
 const dotenv = require("dotenv");
 const { getBreadTable } = require('../database_scripts/getBreadTable');
-const { resetBreadTable } = require('../database_scripts/resetBreadTable');
+const { subtractBreadTable } = require('../database_scripts/subtractBreadTable');
 const { baseSepoliaPublicClient } = require('./baseSepoliaPublicClient');
 const { mainnetPublicClient } = require('./mainnetPublicClient');
 const { breadContractAbi } = require('./breadContractAbi');
@@ -151,8 +151,9 @@ async function burnBread() {
     console.log("Transaction hash:", hash);
     console.log(`Burned from ${finalAddresses.length} addresses:`, finalAddresses.map((addr, i) => `${addr}: ${finalAmounts[i]}`));
 
-    // Reset the bread table only for addresses that were successfully burned from
-    await resetBreadTable(originalAddresses);
+    // Subtract the burned amounts from the bread table
+    const subtractionsToMake = originalAddresses.map((addr, i) => ({ address: addr, amount: finalAmounts[i] }));
+    await subtractBreadTable(subtractionsToMake);
     
     if (finalAddresses.length < addresses.length) {
       console.log(`${addresses.length - finalAddresses.length} addresses were skipped and their pending bread burn remains in the database`);
