@@ -5,6 +5,7 @@ const WebSocket = require('ws');
 
 const { updateLocationTable } = require('./database_scripts/updateLocationTable');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
+const { getOwnerPendingBread } = require('./database_scripts/getOwnerPendingBread');
 const { getEnodesObject } = require('./utils/getEnodesObject');
 const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
@@ -79,6 +80,28 @@ const wsServer = https.createServer({
     } else {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ owner: '', points: 0 }));
+    }
+    return;
+  }
+
+  // Handle /yourpendingbread endpoint
+  if (req.url.startsWith('/yourpendingbread')) {
+    const url = new URL(req.url, `https://${req.headers.host}`);
+    const owner = url.searchParams.get('owner');
+    
+    if (owner) {
+      try {
+        const bread = await getOwnerPendingBread(owner);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ owner, bread }));
+      } catch (error) {
+        console.error('Error retrieving bread:', error);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ owner, bread: 0 }));
+      }
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ owner: '', bread: 0 }));
     }
     return;
   }
