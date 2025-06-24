@@ -477,23 +477,25 @@ io.on('connection', (socket) => {
   });
 });
 
-// New interval function that implements the 10-cycle logic
-// DON't DELETE THIS
+// New interval function that uses the system clock for scheduling
+// don't delete this
 // setInterval(async () => {
-//   await processNodesForBread(poolMap);
-  
-//   breadProcessingCounter++;
-  
-//   // Call mintBread every 10th time
-//   if (breadProcessingCounter >= 5) {
-//     console.log('🍞 5 cycles completed, calling mintBread()');
-//     try {
-//       await mintBread();
-//     } catch (error) {
-//       console.error('Error in mintBread:', error);
+//   const now = new Date();
+//   const seconds = now.getSeconds();
+
+//   // Every 10 seconds (by the clock)
+//   if (seconds % 10 === 0) {
+//     await processNodesForBread(poolMap);
+//     console.log(`🍞 Bread processing at ${now.toISOString()} (seconds: ${seconds})`);
+
+//     // Every 60 seconds (at the top of the minute)
+//     if (seconds === 0) {
+//       console.log('🍞 Top of the minute, calling mintBread()');
+//       try {
+//         await mintBread();
+//       } catch (error) {
+//         console.error('Error in mintBread:', error);
+//       }
 //     }
-//     breadProcessingCounter = 0; // Reset counter
-//   } else {
-//     console.log(`🍞 Bread processing cycle ${breadProcessingCounter}/5`);
 //   }
-// }, 10000);
+// }, 1000);
