@@ -18,6 +18,7 @@ const { updateCache } = require('./utils/updateCache');
 const { broadcastUpdate } = require('./utils/updateCache');
 const { getBlockNumberMode } = require('./utils/getBlockNumberMode');
 const { sendTelegramAlert } = require('./utils/telegramUtils');
+const { isMachineIdSuspicious, extractMacAddressFromMachineId, getSuspiciousMacAddresses, reloadSuspiciousMacAddresses } = require('./utils/suspiciousMacChecker');
 
 const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold } = require('./config');
 
@@ -220,13 +221,18 @@ const wsServerInternal = require('https').createServer(
     try {
       const suspiciousNodesData = Array.from(suspiciousNodes).map(socketId => {
         const client = poolMap.get(socketId);
+        const macAddress = client?.machine_id ? extractMacAddressFromMachineId(client.machine_id) : null;
+        const isMacSuspicious = macAddress ? isMachineIdSuspicious(client.machine_id) : false;
+        
         return {
           socketId,
           nodeId: client?.id || 'unknown',
           machineId: client?.machine_id || 'unknown',
+          macAddress: macAddress || 'unknown',
           owner: client?.owner || 'unknown',
           blockNumber: client?.block_number || 'unknown',
-          lastSeen: client?.lastSeen ? new Date(client.lastSeen).toISOString() : 'unknown'
+          lastSeen: client?.lastSeen ? new Date(client.lastSeen).toISOString() : 'unknown',
+          suspiciousReason: isMacSuspicious ? 'suspicious MAC address' : 'block number deviation'
         };
       });
       
@@ -241,6 +247,63 @@ const wsServerInternal = require('https').createServer(
       res.end(response);
     } catch (error) {
       console.error('Error in /suspiciousNodes endpoint:', error);
+      const errorResponse = JSON.stringify({
+        error: 'Internal server error',
+        message: error.message
+      });
+      res.writeHead(500, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(errorResponse)
+      });
+      res.end(errorResponse);
+    }
+    return;
+  }
+
+  if (req.url === '/suspiciousMacAddresses' && req.method === 'GET') {
+    try {
+      const macAddresses = getSuspiciousMacAddresses();
+      
+      const response = JSON.stringify({
+        suspiciousMacAddresses: macAddresses,
+        count: macAddresses.length
+      }, null, 2);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(response)
+      });
+      res.end(response);
+    } catch (error) {
+      console.error('Error in /suspiciousMacAddresses endpoint:', error);
+      const errorResponse = JSON.stringify({
+        error: 'Internal server error',
+        message: error.message
+      });
+      res.writeHead(500, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(errorResponse)
+      });
+      res.end(errorResponse);
+    }
+    return;
+  }
+
+  if (req.url === '/reloadSuspiciousMacAddresses' && req.method === 'POST') {
+    try {
+      reloadSuspiciousMacAddresses();
+      
+      const response = JSON.stringify({
+        message: 'Suspicious MAC addresses reloaded successfully',
+        suspiciousMacAddresses: getSuspiciousMacAddresses(),
+        count: getSuspiciousMacAddresses().length
+      });
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(response)
+      });
+      res.end(response);
+    } catch (error) {
+      console.error('Error in /reloadSuspiciousMacAddresses endpoint:', error);
       const errorResponse = JSON.stringify({
         error: 'Internal server error',
         message: error.message
@@ -496,18 +559,30 @@ io.on('connection', (socket) => {
       // Calculate the mode before updating the pool to check for suspicious activity
       const mode = getBlockNumberMode(poolMap);
       let isSuspicious = false;
+      let suspiciousReason = '';
       
-      // Check for significant block number deviation and mark as suspicious
-      if (params.block_number && mode) {
+      // Check if MAC address is in the suspicious list
+      if (machineId && isMachineIdSuspicious(machineId)) {
+        const macAddress = extractMacAddressFromMachineId(machineId);
+        console.log(`🚨 Node with suspicious MAC address detected: ${params.id || socket.id} (MAC: ${macAddress})`);
+        // sendTelegramAlert(`\n------------------------------------------\n🚨 Node with suspicious MAC address detected: ${params.id || socket.id} (MAC: ${macAddress}). Node marked as suspicious and excluded from routing.`);
+        suspiciousNodes.add(socket.id);
+        isSuspicious = true;
+        suspiciousReason = 'suspicious MAC address';
+      }
+      
+      // Check for significant block number deviation and mark as suspicious (only if not already suspicious)
+      if (!isSuspicious && params.block_number && mode) {
         const blockDiff = parseInt(params.block_number) - parseInt(mode);
         if (blockDiff > 2) {
           console.log(`🚨 Suspicious node detected: ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode})`);
           sendTelegramAlert(`\n------------------------------------------\n🚨 Suspicious node detected: ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode}). Node marked as suspicious and excluded from routing.`);
           suspiciousNodes.add(socket.id);
           isSuspicious = true;
+          suspiciousReason = 'block number deviation';
         } else {
-          // Remove from suspicious list if block number is now reasonable
-          if (suspiciousNodes.has(socket.id)) {
+          // Remove from suspicious list if block number is now reasonable (but only if not suspicious for MAC address)
+          if (suspiciousNodes.has(socket.id) && !isMachineIdSuspicious(machineId)) {
             console.log(`✅ Node ${params.id || socket.id} block number ${params.block_number} is now within acceptable range. Removing from suspicious list.`);
             suspiciousNodes.delete(socket.id);
           }
@@ -531,7 +606,7 @@ io.on('connection', (socket) => {
       }
       
       poolMap.set(socket.id, clientData);
-      console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${isSuspicious ? 'SUSPICIOUS' : params.block_number}, suspicious: ${isSuspicious}`);
+      console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${isSuspicious ? 'SUSPICIOUS' : params.block_number}, suspicious: ${isSuspicious}${suspiciousReason ? ` (reason: ${suspiciousReason})` : ''}`);
       
       // Update cache immediately when a non-suspicious node checks in with new block number.
       if (params.block_number && !isSuspicious) {
