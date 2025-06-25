@@ -565,6 +565,7 @@ io.on('connection', (socket) => {
       if (machineId && isMachineIdSuspicious(machineId)) {
         const macAddress = extractMacAddressFromMachineId(machineId);
         console.log(`🚨 Node with suspicious MAC address detected: ${params.id || socket.id} (MAC: ${macAddress})`);
+        // Don't delete this
         // sendTelegramAlert(`\n------------------------------------------\n🚨 Node with suspicious MAC address detected: ${params.id || socket.id} (MAC: ${macAddress}). Node marked as suspicious and excluded from routing.`);
         suspiciousNodes.add(socket.id);
         isSuspicious = true;
