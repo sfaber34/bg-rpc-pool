@@ -23,21 +23,36 @@ const { isMachineIdSuspicious, extractMacAddressFromMachineId, getSuspiciousMacA
 const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold } = require('./config');
 
 // Map of RPC methods that can be cached with their block number parameter positions
-const cacheableMethods = new Map([
-  ['eth_call', 1],
-  ['eth_getBalance', 1],
+const cacheableMethods = new Map([  
+  // Methods with block number at position 0 (first parameter)
   ['eth_getBlockByNumber', 0],
-  ['eth_getBlockTransactionCountByHash', null],
   ['eth_getBlockTransactionCountByNumber', 0],
-  ['eth_getCode', 1],
-  ['eth_getStorageAt', 2],
-  ['eth_getTransactionCount', 1],
   ['eth_getUncleCountByBlockNumber', 0],
+  ['eth_getUncleByBlockNumberAndIndex', 0],
+  ['eth_getTransactionByBlockNumberAndIndex', 0],
+  ['eth_getBlockReceipts', 0],
+  
+  // Methods with block number at position 1 (second parameter)
+  ['eth_getBalance', 1],
+  ['eth_getTransactionCount', 1],
+  ['eth_getCode', 1],
+  ['eth_call', 1],
+  ['eth_estimateGas', 1],
+  ['eth_feeHistory', 1],
+  
+  // Methods with block number at position 2 (third parameter)
+  ['eth_getStorageAt', 2],
+  // ['eth_getProof', 2],
+  
+  // Methods with no block number parameter (hash-based or transaction-based)
+  ['eth_getBlockByHash', null],
+  ['eth_getBlockTransactionCountByHash', null],
   ['eth_getUncleCountByBlockHash', null],
+  ['eth_getUncleByBlockHashAndIndex', null],
+  ['eth_getTransactionByHash', null],
+  ['eth_getTransactionByBlockHashAndIndex', null],
+  ['eth_getTransactionReceipt', null],
 ]);
-
-// To Add (Don't delete)
-// eth_getLogs (this one is nasty; multiple block number parameters and block hash)
 
 const poolMap = new Map();
 const seenNodes = new Set(); // Track nodes we've already processed
