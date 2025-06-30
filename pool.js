@@ -584,7 +584,7 @@ io.on('connection', (socket) => {
         const blockDiff = parseInt(params.block_number) - parseInt(mode);
         if (blockDiff > 2) {
           console.log(`🚨 Suspicious node detected: ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode})`);
-          sendTelegramAlert(`\n------------------------------------------\n🚨 Suspicious node detected: ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode}). Node marked as suspicious and excluded from routing.`);
+          // sendTelegramAlert(`\n------------------------------------------\n🚨 Suspicious node detected: ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode}). Node marked as suspicious and excluded from routing.`);
           suspiciousNodes.add(socket.id);
           isSuspicious = true;
           suspiciousReason = 'block number deviation';
