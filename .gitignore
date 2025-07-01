@@ -27,3 +27,5 @@ Thumbs.db
 # SSL files
 server.key
 server.cert
+
+suspiciousMacAddresses.json
