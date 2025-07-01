@@ -42,7 +42,6 @@ const cacheableMethods = new Map([
   
   // Methods with block number at position 2 (third parameter)
   ['eth_getStorageAt', 2],
-  // ['eth_getProof', 2],
   
   // Methods with no block number parameter (hash-based or transaction-based)
   ['eth_getBlockByHash', null],
