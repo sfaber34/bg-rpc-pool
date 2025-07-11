@@ -5,6 +5,7 @@ const WebSocket = require('ws');
 
 const { updateLocationTable } = require('./database_scripts/updateLocationTable');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
+const { getOwnerPendingBread } = require('./database_scripts/getOwnerPendingBread');
 const { getEnodesObject } = require('./utils/getEnodesObject');
 const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
@@ -16,6 +17,8 @@ const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
 const { broadcastUpdate } = require('./utils/updateCache');
+const { processNodesForBread } = require('./utils/processNodesForBread');
+const { mintBread } = require('./utils/mintBread');
 const { getBlockNumberMode } = require('./utils/getBlockNumberMode');
 const { sendTelegramAlert } = require('./utils/telegramUtils');
 const { isMachineIdSuspicious, extractMacAddressFromMachineId, getSuspiciousMacAddresses, reloadSuspiciousMacAddresses } = require('./utils/suspiciousMacChecker');
@@ -54,6 +57,10 @@ const cacheableMethods = new Map([
 ]);
 
 const poolMap = new Map();
+
+// Counter to track processNodesForBread calls
+let breadProcessingCounter = 0;
+
 const seenNodes = new Set(); // Track nodes we've already processed
 const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
 const pendingTimingSockets = new Set(); // Track socket IDs that need timing data once they get a valid node ID
@@ -129,6 +136,28 @@ const wsServer = https.createServer({
     } else {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ owner: '', points: 0 }));
+    }
+    return;
+  }
+
+  // Handle /yourpendingbread endpoint
+  if (req.url.startsWith('/yourpendingbread')) {
+    const url = new URL(req.url, `https://${req.headers.host}`);
+    const owner = url.searchParams.get('owner');
+    
+    if (owner) {
+      try {
+        const bread = await getOwnerPendingBread(owner);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ owner, bread }));
+      } catch (error) {
+        console.error('Error retrieving bread:', error);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ owner, bread: 0 }));
+      }
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ owner: '', bread: 0 }));
     }
     return;
   }
@@ -681,3 +710,26 @@ io.on('connection', (socket) => {
     suspiciousNodes.delete(socket.id);
   });
 });
+
+// New interval function that uses the system clock for scheduling
+// don't delete this
+// setInterval(async () => {
+//   const now = new Date();
+//   const seconds = now.getSeconds();
+
+//   // Every 10 seconds (by the clock)
+//   if (seconds % 10 === 0) {
+//     await processNodesForBread(poolMap);
+//     console.log(`🍞 Bread processing at ${now.toISOString()} (seconds: ${seconds})`);
+
+//     // Every 60 seconds (at the top of the minute)
+//     if (seconds === 0) {
+//       console.log('🍞 Top of the minute, calling mintBread()');
+//       try {
+//         await mintBread();
+//       } catch (error) {
+//         console.error('Error in mintBread:', error);
+//       }
+//     }
+//   }
+// }, 1000);
