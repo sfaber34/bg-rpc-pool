@@ -1,11 +1,11 @@
 const { createWalletClient, http, isAddress } = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
-const { baseSepolia } = require("viem/chains");
+const { base } = require("viem/chains");
 const path = require("path");
 const dotenv = require("dotenv");
 const { getBreadTable } = require('../database_scripts/getBreadTable');
 const { subtractBreadTable } = require('../database_scripts/subtractBreadTable');
-const { baseSepoliaPublicClient } = require('./baseSepoliaPublicClient');
+const { basePublicClient } = require('./basePublicClient');
 const { mainnetPublicClient } = require('./mainnetPublicClient');
 const { breadContractAbi } = require('./breadContractAbi');
 const { validateAndResolveAddresses, checkAddressesExist } = require('./addressUtils');
@@ -26,7 +26,7 @@ async function checkBreadBalances(addresses, amounts) {
     const amount = amounts[i];
     try {
       // Check the bread balance of the address
-      const balance = await baseSepoliaPublicClient.readContract({
+      const balance = await basePublicClient.readContract({
         address: breadContractAddress,
         abi: breadContractAbi,
         functionName: 'balanceOf',
@@ -136,7 +136,7 @@ async function burnBread() {
     const account = privateKeyToAccount(key);
     const baseWalletClient = createWalletClient({
       account,
-      chain: baseSepolia,
+      chain: base,
       transport: http(),
     });
 

@@ -1,6 +1,6 @@
 const { isAddress } = require("viem");
 const { mainnetPublicClient } = require("./mainnetPublicClient");
-const { baseSepoliaPublicClient } = require("./baseSepoliaPublicClient");
+const { basePublicClient } = require("./basePublicClient");
 
 // Validate and resolve addresses (ENS support)
 async function validateAndResolveAddresses(addresses) {
@@ -48,8 +48,8 @@ async function checkAddressesExist(addresses) {
   for (let i = 0; i < addresses.length; i++) {
     const addr = addresses[i];
     try {
-      const code = await baseSepoliaPublicClient.getBytecode({ address: addr });
-      const balance = await baseSepoliaPublicClient.getBalance({ address: addr });
+      const code = await basePublicClient.getBytecode({ address: addr });
+      const balance = await basePublicClient.getBalance({ address: addr });
       
       // Check if it's a valid address (has been used or is a contract)
       if (code === '0x' && balance === 0n) {

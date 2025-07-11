@@ -1,13 +1,13 @@
 const { createWalletClient, http, isAddress } = require("viem");
 const { privateKeyToAccount } = require("viem/accounts");
-const { baseSepolia } = require("viem/chains");
+const { base } = require("viem/chains");
 const path = require("path");
 const dotenv = require("dotenv");
 const { getBreadTable } = require('../database_scripts/getBreadTable');
 const { subtractBreadTable } = require('../database_scripts/subtractBreadTable');
 const { breadContractAbi } = require('./breadContractAbi');
 const { validateAndResolveAddresses, checkAddressesExist } = require('./addressUtils');
-const { baseSepoliaPublicClient } = require('./baseSepoliaPublicClient');
+const { basePublicClient } = require('./basePublicClient');
 
 // const __dirname = path.dirname(__filename);
 
@@ -74,7 +74,7 @@ async function mintBread() {
       const requestedAmount = finalAmounts[i];
       
       try {
-        const remainingMintAmount = await baseSepoliaPublicClient.readContract({
+        const remainingMintAmount = await basePublicClient.readContract({
           address: breadContractAddress,
           abi: breadContractAbi,
           functionName: 'getRemainingMintAmount',
@@ -126,7 +126,7 @@ async function mintBread() {
     const account = privateKeyToAccount(key);
     const baseWalletClient = createWalletClient({
       account,
-      chain: baseSepolia,
+      chain: base,
       transport: http(),
     });
 

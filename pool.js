@@ -711,25 +711,34 @@ io.on('connection', (socket) => {
   });
 });
 
+// Track last processed times to ensure we don't miss or duplicate events
+let lastProcessedHour = -1;
+let lastProcessedDay = -1;
+
 // New interval function that uses the system clock for scheduling
 // don't delete this
-// setInterval(async () => {
-//   const now = new Date();
-//   const seconds = now.getSeconds();
+setInterval(async () => {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
 
-//   // Every 10 seconds (by the clock)
-//   if (seconds % 10 === 0) {
-//     await processNodesForBread(poolMap);
-//     console.log(`🍞 Bread processing at ${now.toISOString()} (seconds: ${seconds})`);
+  // At the top of every hour (minutes === 0 and within first 3 seconds for safety)
+  if (minutes === 0 && seconds <= 2 && lastProcessedHour !== hours) {
+    lastProcessedHour = hours;
+    await processNodesForBread(poolMap);
+    console.log(`🍞 Bread processing at top of hour: ${now.toISOString()}`);
 
-//     // Every 60 seconds (at the top of the minute)
-//     if (seconds === 0) {
-//       console.log('🍞 Top of the minute, calling mintBread()');
-//       try {
-//         await mintBread();
-//       } catch (error) {
-//         console.error('Error in mintBread:', error);
-//       }
-//     }
-//   }
-// }, 1000);
+    // At the start of each day (hours === 0)
+    if (hours === 0 && lastProcessedDay !== dayOfYear) {
+      lastProcessedDay = dayOfYear;
+      console.log('🍞 Start of day, calling mintBread()');
+      try {
+        await mintBread();
+      } catch (error) {
+        console.error('Error in mintBread:', error);
+      }
+    }
+  }
+}, 1000);
