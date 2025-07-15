@@ -3,7 +3,7 @@ const { base } = require("viem/chains");
 
 const basePublicClient = createPublicClient({
   chain: base,
-  transport: http(),
+  transport: http("https://base-rpc.publicnode.com"),
 });
 
 module.exports = { basePublicClient }; 
