@@ -448,11 +448,16 @@ const wsServerInternal = require('https').createServer(
               }
             }
 
-            // Check if method is cacheable and block number is a hex value
-            const method = rpcRequest.method;
-            console.log(`💾 Method: ${method}`);
-            if (cacheableMethods.has(method) && shouldCache) {
-              console.log(`💾 Is cacheable method and responding node is not suspicious`);
+                      // Check if method is cacheable and block number is a hex value
+          const method = rpcRequest.method;
+          console.log(`💾 Method: ${method}`);
+          if (cacheableMethods.has(method) && shouldCache) {
+            console.log(`💾 Is cacheable method and responding node is not suspicious`);
+            
+            // Don't cache if result is null
+            if (result.data === null) {
+              console.log(`🚫 Not caching null result for method: ${method}`);
+            } else {
               const blockNumberPosition = cacheableMethods.get(method);
               const params = rpcRequest.params || [];
               
@@ -475,9 +480,10 @@ const wsServerInternal = require('https').createServer(
                   broadcastUpdate(wssCache, method, params, result.data);
                 }
               }
-            } else if (!shouldCache) {
-              console.log(`🚫 Skipping cache for response from suspicious node`);
             }
+          } else if (!shouldCache) {
+            console.log(`🚫 Skipping cache for response from suspicious node`);
+          }
           } else {
             res.statusCode = 500;
             res.end(JSON.stringify({
@@ -717,28 +723,28 @@ let lastProcessedDay = -1;
 
 // New interval function that uses the system clock for scheduling
 // don't delete this
-setInterval(async () => {
-  const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
-  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+// setInterval(async () => {
+//   const now = new Date();
+//   const hours = now.getHours();
+//   const minutes = now.getMinutes();
+//   const seconds = now.getSeconds();
+//   const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
 
-  // At the top of every hour (minutes === 0 and within first 3 seconds for safety)
-  if (minutes === 0 && seconds <= 2 && lastProcessedHour !== hours) {
-    lastProcessedHour = hours;
-    await processNodesForBread(poolMap);
-    console.log(`🍞 Bread processing at top of hour: ${now.toISOString()}`);
+//   // At the top of every hour (minutes === 0 and within first 3 seconds for safety)
+//   if (minutes === 0 && seconds <= 2 && lastProcessedHour !== hours) {
+//     lastProcessedHour = hours;
+//     await processNodesForBread(poolMap);
+//     console.log(`🍞 Bread processing at top of hour: ${now.toISOString()}`);
 
-    // At the start of each day (hours === 0)
-    if (hours === 0 && lastProcessedDay !== dayOfYear) {
-      lastProcessedDay = dayOfYear;
-      console.log('🍞 Start of day, calling mintBread()');
-      try {
-        await mintBread();
-      } catch (error) {
-        console.error('Error in mintBread:', error);
-      }
-    }
-  }
-}, 1000);
+//     // At the start of each day (hours === 0)
+//     if (hours === 0 && lastProcessedDay !== dayOfYear) {
+//       lastProcessedDay = dayOfYear;
+//       console.log('🍞 Start of day, calling mintBread()');
+//       try {
+//         await mintBread();
+//       } catch (error) {
+//         console.error('Error in mintBread:', error);
+//       }
+//     }
+//   }
+// }, 1000);
