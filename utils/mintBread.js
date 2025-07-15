@@ -127,7 +127,7 @@ async function mintBread() {
     const baseWalletClient = createWalletClient({
       account,
       chain: base,
-      transport: http(),
+      transport: http("https://base-rpc.publicnode.com"),
     });
 
     const hash = await baseWalletClient.writeContract({
