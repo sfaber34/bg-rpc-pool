@@ -5,6 +5,7 @@ const WebSocket = require('ws');
 
 const { updateLocationTable } = require('./database_scripts/updateLocationTable');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
+const { getOwnerPendingBread } = require('./database_scripts/getOwnerPendingBread');
 const { getEnodesObject } = require('./utils/getEnodesObject');
 const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
@@ -16,6 +17,8 @@ const { handleRequestSingle } = require('./utils/handleRequestSingle');
 const { handleRequestSet } = require('./utils/handleRequestSet');
 const { updateCache } = require('./utils/updateCache');
 const { broadcastUpdate } = require('./utils/updateCache');
+const { processNodesForBread } = require('./utils/processNodesForBread');
+const { mintBread } = require('./utils/mintBread');
 const { getBlockNumberMode } = require('./utils/getBlockNumberMode');
 const { sendTelegramAlert } = require('./utils/telegramUtils');
 const { isMachineIdSuspicious, extractMacAddressFromMachineId, getSuspiciousMacAddresses, reloadSuspiciousMacAddresses } = require('./utils/suspiciousMacChecker');
@@ -54,6 +57,10 @@ const cacheableMethods = new Map([
 ]);
 
 const poolMap = new Map();
+
+// Counter to track processNodesForBread calls
+let breadProcessingCounter = 0;
+
 const seenNodes = new Set(); // Track nodes we've already processed
 const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
 const pendingTimingSockets = new Set(); // Track socket IDs that need timing data once they get a valid node ID
@@ -129,6 +136,28 @@ const wsServer = https.createServer({
     } else {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ owner: '', points: 0 }));
+    }
+    return;
+  }
+
+  // Handle /yourpendingbread endpoint
+  if (req.url.startsWith('/yourpendingbread')) {
+    const url = new URL(req.url, `https://${req.headers.host}`);
+    const owner = url.searchParams.get('owner');
+    
+    if (owner) {
+      try {
+        const bread = await getOwnerPendingBread(owner);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ owner, bread }));
+      } catch (error) {
+        console.error('Error retrieving bread:', error);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ owner, bread: 0 }));
+      }
+    } else {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ owner: '', bread: 0 }));
     }
     return;
   }
@@ -419,11 +448,16 @@ const wsServerInternal = require('https').createServer(
               }
             }
 
-            // Check if method is cacheable and block number is a hex value
-            const method = rpcRequest.method;
-            console.log(`💾 Method: ${method}`);
-            if (cacheableMethods.has(method) && shouldCache) {
-              console.log(`💾 Is cacheable method and responding node is not suspicious`);
+                      // Check if method is cacheable and block number is a hex value
+          const method = rpcRequest.method;
+          console.log(`💾 Method: ${method}`);
+          if (cacheableMethods.has(method) && shouldCache) {
+            console.log(`💾 Is cacheable method and responding node is not suspicious`);
+            
+            // Don't cache if result is null
+            if (result.data === null) {
+              console.log(`🚫 Not caching null result for method: ${method}`);
+            } else {
               const blockNumberPosition = cacheableMethods.get(method);
               const params = rpcRequest.params || [];
               
@@ -446,9 +480,10 @@ const wsServerInternal = require('https').createServer(
                   broadcastUpdate(wssCache, method, params, result.data);
                 }
               }
-            } else if (!shouldCache) {
-              console.log(`🚫 Skipping cache for response from suspicious node`);
             }
+          } else if (!shouldCache) {
+            console.log(`🚫 Skipping cache for response from suspicious node`);
+          }
           } else {
             res.statusCode = 500;
             res.end(JSON.stringify({
@@ -681,3 +716,35 @@ io.on('connection', (socket) => {
     suspiciousNodes.delete(socket.id);
   });
 });
+
+// Track last processed times to ensure we don't miss or duplicate events
+let lastProcessedHour = -1;
+let lastProcessedDay = -1;
+
+// New interval function that uses the system clock for scheduling
+// don't delete this
+// setInterval(async () => {
+//   const now = new Date();
+//   const hours = now.getHours();
+//   const minutes = now.getMinutes();
+//   const seconds = now.getSeconds();
+//   const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+
+//   // At the top of every hour (minutes === 0 and within first 3 seconds for safety)
+//   if (minutes === 0 && seconds <= 2 && lastProcessedHour !== hours) {
+//     lastProcessedHour = hours;
+//     await processNodesForBread(poolMap);
+//     console.log(`🍞 Bread processing at top of hour: ${now.toISOString()}`);
+
+//     // At the start of each day (hours === 0)
+//     if (hours === 0 && lastProcessedDay !== dayOfYear) {
+//       lastProcessedDay = dayOfYear;
+//       console.log('🍞 Start of day, calling mintBread()');
+//       try {
+//         await mintBread();
+//       } catch (error) {
+//         console.error('Error in mintBread:', error);
+//       }
+//     }
+//   }
+// }, 1000);
