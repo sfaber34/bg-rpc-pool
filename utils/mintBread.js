@@ -37,11 +37,29 @@ async function mintBread() {
 
     // Check if we're still in cooldown period
     console.log('Checking batch mint cooldown...');
-    const remainingCooldown = await basePublicClient.readContract({
-      address: breadContractAddress,
-      abi: breadContractAbi,
-      functionName: 'getRemainingBatchMintCooldown',
-    });
+    let remainingCooldown;
+    try {
+      remainingCooldown = await basePublicClient.readContract({
+        address: breadContractAddress,
+        abi: breadContractAbi,
+        functionName: 'getRemainingBatchMintCooldown',
+      });
+    } catch (cooldownError) {
+      console.error("Failed to check batch mint cooldown:", cooldownError.message);
+      
+      try {
+        await sendTelegramAlert(`
+          🚨 COOLDOWN CHECK FAILED - ABORTING MINT
+          Error: ${cooldownError.message}
+          
+          Unable to check batch mint cooldown status.
+          This may indicate a contract issue or network problem.
+        `.trim());
+      } catch (telegramError) {
+        console.error("Failed to send telegram alert:", telegramError.message);
+      }
+      return;
+    }
 
     if (remainingCooldown > 0) {
       const cooldownHours = Math.ceil(Number(remainingCooldown) / 3600);
@@ -85,11 +103,29 @@ async function mintBread() {
     // 3. Check global remaining batch mint amount
     console.log('Checking global remaining batch mint amount...');
     
-    const remainingBatchAmount = await basePublicClient.readContract({
-      address: breadContractAddress,
-      abi: breadContractAbi,
-      functionName: 'getRemainingBatchMintAmount',
-    });
+    let remainingBatchAmount;
+    try {
+      remainingBatchAmount = await basePublicClient.readContract({
+        address: breadContractAddress,
+        abi: breadContractAbi,
+        functionName: 'getRemainingBatchMintAmount',
+      });
+    } catch (batchAmountError) {
+      console.error("Failed to check remaining batch mint amount:", batchAmountError.message);
+      
+      try {
+        await sendTelegramAlert(`
+          🚨 BATCH AMOUNT CHECK FAILED - ABORTING MINT
+          Error: ${batchAmountError.message}
+          
+          Unable to check remaining batch mint amount.
+          This may indicate a contract issue or network problem.
+        `.trim());
+      } catch (telegramError) {
+        console.error("Failed to send telegram alert:", telegramError.message);
+      }
+      return;
+    }
 
     const remainingAmountTokens = Number(remainingBatchAmount) / (10 ** 18);
     const totalRequestedAmount = finalAmounts.reduce((sum, amount) => sum + amount, 0);
@@ -183,8 +219,11 @@ async function mintBread() {
         await sendTelegramAlert(`
         🚨 GAS ESTIMATION FAILED - ABORTING MINT
         Error: ${gasError.message}
+        Contract: ${breadContractAddress}
+        Function: batchMint
+        Args Count: ${finalAddresses.length} addresses
 
-        This may indicate a contract issue or network problem.
+        This may indicate a contract issue, custom error, or network problem.
         `.trim());
       } catch (telegramError) {
         console.error("Failed to send telegram alert:", telegramError.message);
@@ -192,15 +231,36 @@ async function mintBread() {
       return;
     }
 
-    const hash = await baseWalletClient.writeContract({
-      address: breadContractAddress,
-      abi: breadContractAbi,
-      functionName: "batchMint",
-              args: [finalAddresses, scaledAmounts],
-    });
+    let hash;
+    try {
+      hash = await baseWalletClient.writeContract({
+        address: breadContractAddress,
+        abi: breadContractAbi,
+        functionName: "batchMint",
+        args: [finalAddresses, scaledAmounts],
+      });
 
-    console.log("🍞 Batch mint transaction submitted");
-    console.log("Transaction hash:", hash);
+      console.log("🍞 Batch mint transaction submitted");
+      console.log("Transaction hash:", hash);
+    } catch (mintError) {
+      console.error("Batch mint transaction submission failed:", mintError.message);
+      
+      try {
+        await sendTelegramAlert(`
+          🚨 BATCH MINT TRANSACTION SUBMISSION FAILED
+          Error: ${mintError.message}
+          Contract: ${breadContractAddress}
+          Function: batchMint
+          Addresses: ${finalAddresses.length}
+          Total Amount: ${totalRequestedAmount} tokens
+
+          Transaction failed to submit. This may indicate a custom contract error or network issue.
+        `.trim());
+      } catch (telegramError) {
+        console.error("Failed to send telegram alert:", telegramError.message);
+      }
+      return;
+    }
     
     // Wait for transaction confirmation (5 minute timeout)
     console.log("Waiting for transaction confirmation...");
@@ -277,9 +337,11 @@ async function mintBread() {
           🚨 PERIOD COMPLETION ERROR
           Mint Hash: ${hash} (SUCCESS)
           Error: ${completionError.message}
+          Contract: ${breadContractAddress}
+          Function: completeBatchMintingPeriod
 
           Batch mint was successful, but period completion encountered an error.
-          Cooldown may not reset for next period - manual intervention required.
+          This may be a custom contract error. Cooldown may not reset for next period - manual intervention required.
         `.trim());
       } catch (telegramError) {
         console.error("Failed to send telegram alert:", telegramError.message);
@@ -298,6 +360,20 @@ async function mintBread() {
     }
   } catch (error) {
     console.error("Error in mintBread:", error);
+    
+    // Send telegram alert for any unhandled errors
+    try {
+      await sendTelegramAlert(`
+        🚨 UNHANDLED ERROR IN MINT BREAD PROCESS
+        Error: ${error.message}
+        Stack: ${error.stack}
+
+        An unexpected error occurred during the bread minting process.
+        Manual investigation required.
+      `.trim());
+    } catch (telegramError) {
+      console.error("Failed to send telegram alert for unhandled error:", telegramError.message);
+    }
   }
 }
 
