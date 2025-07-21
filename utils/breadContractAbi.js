@@ -1,10 +1,62 @@
 const breadContractAbi = [
   {
     inputs: [
-      { internalType: "address", name: "rpcBreadMinterAddress_", type: "address" },
+      { internalType: "address", name: "initialOwner", type: "address" },
+      { internalType: "address", name: "batchMinterAddress_", type: "address" },
+      { internalType: "address", name: "pauseAddress_", type: "address" },
     ],
     stateMutability: "nonpayable",
     type: "constructor",
+  },
+  {
+    inputs: [],
+    name: "ArrayLengthMismatch",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "BatchMintAmountExceedsLimit",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "BatchMintCooldownNotExpired",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "BatchMintLimitCannotBeZero",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "BatchMintingPeriodCompletionPaused",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "BatchSizeTooLarge",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "CannotMintToZeroAddress",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "CannotMintWhilePaused",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "CannotMintZeroAmount",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "CannotSetZeroAddress",
+    type: "error",
   },
   {
     inputs: [
@@ -25,23 +77,75 @@ const breadContractAbi = [
     type: "error",
   },
   {
-    inputs: [{ internalType: "address", name: "approver", type: "address" }],
+    inputs: [
+      { internalType: "address", name: "approver", type: "address" },
+    ],
     name: "ERC20InvalidApprover",
     type: "error",
   },
   {
-    inputs: [{ internalType: "address", name: "receiver", type: "address" }],
+    inputs: [
+      { internalType: "address", name: "receiver", type: "address" },
+    ],
     name: "ERC20InvalidReceiver",
     type: "error",
   },
   {
-    inputs: [{ internalType: "address", name: "sender", type: "address" }],
+    inputs: [
+      { internalType: "address", name: "sender", type: "address" },
+    ],
     name: "ERC20InvalidSender",
     type: "error",
   },
   {
-    inputs: [{ internalType: "address", name: "spender", type: "address" }],
+    inputs: [
+      { internalType: "address", name: "spender", type: "address" },
+    ],
     name: "ERC20InvalidSpender",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "EmptyArrays",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "NoBatchMintingOccurredThisPeriod",
+    type: "error",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "owner", type: "address" },
+    ],
+    name: "OwnableInvalidOwner",
+    type: "error",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "account", type: "address" },
+    ],
+    name: "OwnableUnauthorizedAccount",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "OwnerMintAmountExceedsLimit",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "OwnerMintCooldownNotExpired",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "UnauthorizedBatchMinter",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "UnauthorizedPause",
     type: "error",
   },
   {
@@ -60,7 +164,49 @@ const breadContractAbi = [
       { indexed: true, internalType: "address", name: "user", type: "address" },
       { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
     ],
-    name: "Mint",
+    name: "BatchMint",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: "uint256", name: "newLimit", type: "uint256" },
+    ],
+    name: "BatchMintLimitUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: "uint256", name: "timestamp", type: "uint256" },
+    ],
+    name: "BatchMintingPeriodCompleted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: "uint256", name: "endTime", type: "uint256" },
+    ],
+    name: "MintingPaused",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "to", type: "address" },
+      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "OwnerMint",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "address", name: "previousOwner", type: "address" },
+      { indexed: true, internalType: "address", name: "newOwner", type: "address" },
+    ],
+    name: "OwnershipTransferred",
     type: "event",
   },
   {
@@ -74,13 +220,31 @@ const breadContractAbi = [
     type: "event",
   },
   {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: "address", name: "user", type: "address" },
-      { indexed: false, internalType: "uint256", name: "amount", type: "uint256" },
+    inputs: [],
+    name: "BATCH_MINT_COOLDOWN",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
     ],
-    name: "PenaltyBurn",
-    type: "event",
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "OWNER_MINT_COOLDOWN",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "OWNER_MINT_LIMIT",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
   },
   {
     inputs: [
@@ -88,7 +252,9 @@ const breadContractAbi = [
       { internalType: "address", name: "spender", type: "address" },
     ],
     name: "allowance",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
     stateMutability: "view",
     type: "function",
   },
@@ -98,14 +264,20 @@ const breadContractAbi = [
       { internalType: "uint256", name: "value", type: "uint256" },
     ],
     name: "approve",
-    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    outputs: [
+      { internalType: "bool", name: "", type: "bool" },
+    ],
     stateMutability: "nonpayable",
     type: "function",
   },
   {
-    inputs: [{ internalType: "address", name: "account", type: "address" }],
+    inputs: [
+      { internalType: "address", name: "account", type: "address" },
+    ],
     name: "balanceOf",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
     stateMutability: "view",
     type: "function",
   },
@@ -120,11 +292,35 @@ const breadContractAbi = [
     type: "function",
   },
   {
-    inputs: [
-      { internalType: "address[]", name: "addresses", type: "address[]" },
-      { internalType: "uint256[]", name: "amounts", type: "uint256[]" },
+    inputs: [],
+    name: "batchMintLimit",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
     ],
-    name: "batchBurn",
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "batchMinterAddress",
+    outputs: [
+      { internalType: "address", name: "", type: "address" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "batchMintingOccurredThisPeriod",
+    outputs: [
+      { internalType: "bool", name: "", type: "bool" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "completeBatchMintingPeriod",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -132,7 +328,99 @@ const breadContractAbi = [
   {
     inputs: [],
     name: "decimals",
-    outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
+    outputs: [
+      { internalType: "uint8", name: "", type: "uint8" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getOwnerMintRemainingCooldown",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getRemainingBatchMintAmount",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getRemainingBatchMintCooldown",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getRemainingOwnerMintAmount",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getTotalBatchMintedInPeriod",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getTotalOwnerMintedInPeriod",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "lastBatchMintTime",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "lastOwnerMintTime",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "name",
+    outputs: [
+      { internalType: "string", name: "", type: "string" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "owner",
+    outputs: [
+      { internalType: "address", name: "", type: "address" },
+    ],
     stateMutability: "view",
     type: "function",
   },
@@ -141,36 +429,103 @@ const breadContractAbi = [
       { internalType: "address", name: "to", type: "address" },
       { internalType: "uint256", name: "amount", type: "uint256" },
     ],
-    name: "mint",
+    name: "ownerMint",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
   },
   {
     inputs: [],
-    name: "name",
-    outputs: [{ internalType: "string", name: "", type: "string" }],
+    name: "pauseAddress",
+    outputs: [
+      { internalType: "address", name: "", type: "address" },
+    ],
     stateMutability: "view",
     type: "function",
   },
   {
     inputs: [],
-    name: "rpcBreadMinterAddress",
-    outputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "pauseEndTime",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
     stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "pauseMinting",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "renounceOwnership",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "newLimit", type: "uint256" },
+    ],
+    name: "setBatchMintLimit",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "newAddress", type: "address" },
+    ],
+    name: "setBatchMinterAddress",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "newAddress", type: "address" },
+    ],
+    name: "setPauseAddress",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
   {
     inputs: [],
     name: "symbol",
-    outputs: [{ internalType: "string", name: "", type: "string" }],
+    outputs: [
+      { internalType: "string", name: "", type: "string" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalBatchMintedInPeriod",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalOwnerMintedInPeriod",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
     stateMutability: "view",
     type: "function",
   },
   {
     inputs: [],
     name: "totalSupply",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
     stateMutability: "view",
     type: "function",
   },
@@ -180,7 +535,9 @@ const breadContractAbi = [
       { internalType: "uint256", name: "value", type: "uint256" },
     ],
     name: "transfer",
-    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    outputs: [
+      { internalType: "bool", name: "", type: "bool" },
+    ],
     stateMutability: "nonpayable",
     type: "function",
   },
@@ -191,17 +548,19 @@ const breadContractAbi = [
       { internalType: "uint256", name: "value", type: "uint256" },
     ],
     name: "transferFrom",
-    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    outputs: [
+      { internalType: "bool", name: "", type: "bool" },
+    ],
     stateMutability: "nonpayable",
     type: "function",
   },
   {
     inputs: [
-      { internalType: "address", name: "user", type: "address" },
+      { internalType: "address", name: "newOwner", type: "address" },
     ],
-    name: "getRemainingMintAmount",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
+    name: "transferOwnership",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ];
