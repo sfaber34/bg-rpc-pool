@@ -418,14 +418,17 @@ const wsServerInternal = require('https').createServer(
           } else if (rpcRequest.method === 'eth_blockNumber') {
             console.log(`Using handleRequestSingle for eth_blockNumber method`);
             result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
+          } else if (!cacheableMethods.has(rpcRequest.method)) {
+            console.log(`Using handleRequestSingle for non-cacheable method: ${rpcRequest.method}`);
+            result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
           } else {
             const useSetHandler = Math.floor(Math.random() * requestSetChance) === 0;
             
             if (useSetHandler) {
-              console.log(`Randomly selected handleRequestSet (1/${requestSetChance} probability)`);
+              console.log(`Randomly selected handleRequestSet for cacheable method: ${rpcRequest.method} (1/${requestSetChance} probability)`);
               result = await handleRequestSet(rpcRequest, selectedClients, poolMap, io);
             } else {
-              console.log(`Randomly selected handleRequestSingle (${requestSetChance-1}/${requestSetChance} probability)`);
+              console.log(`Randomly selected handleRequestSingle for cacheable method: ${rpcRequest.method} (${requestSetChance-1}/${requestSetChance} probability)`);
               result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
             }
           }
