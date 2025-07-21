@@ -167,70 +167,6 @@ async function mintBread() {
       transport: http("https://base-rpc.publicnode.com"),
     });
 
-    // Check gas estimation and ETH balance
-    console.log('Estimating gas and checking ETH balance...');
-    try {
-      const gasEstimate = await basePublicClient.estimateContractGas({
-        address: breadContractAddress,
-        abi: breadContractAbi,
-        functionName: "batchMint",
-        args: [finalAddresses, scaledAmounts],
-        account: account.address,
-      });
-
-      // Get current gas price
-      const gasPrice = await basePublicClient.getGasPrice();
-      const estimatedGasCost = gasEstimate * gasPrice;
-
-      // Check ETH balance
-      const ethBalance = await basePublicClient.getBalance({
-        address: account.address,
-      });
-
-      console.log(`Gas estimate: ${gasEstimate}`);
-      console.log(`Estimated gas cost: ${Number(estimatedGasCost) / (10 ** 18)} ETH`);
-      console.log(`ETH balance: ${Number(ethBalance) / (10 ** 18)} ETH`);
-
-      if (ethBalance < estimatedGasCost) {
-        const shortfall = Number(estimatedGasCost - ethBalance) / (10 ** 18);
-        console.error(`❌ Insufficient ETH for gas. Need ${shortfall.toFixed(6)} more ETH`);
-        
-        try {
-          await sendTelegramAlert(`
-            🚨 INSUFFICIENT ETH FOR GAS - ABORTING MINT
-            Account: ${account.address}
-            ETH Balance: ${(Number(ethBalance) / (10 ** 18)).toFixed(6)} ETH
-            Estimated Gas Cost: ${(Number(estimatedGasCost) / (10 ** 18)).toFixed(6)} ETH
-            Shortfall: ${shortfall.toFixed(6)} ETH
-
-            Minting aborted. Please add ETH to the minter account.
-          `.trim());
-        } catch (telegramError) {
-          console.error("Failed to send telegram alert:", telegramError.message);
-        }
-        return;
-      }
-
-      console.log('✅ Sufficient ETH for gas');
-    } catch (gasError) {
-      console.error("Gas estimation failed:", gasError.message);
-      
-      try {
-        await sendTelegramAlert(`
-        🚨 GAS ESTIMATION FAILED - ABORTING MINT
-        Error: ${gasError.message}
-        Contract: ${breadContractAddress}
-        Function: batchMint
-        Args Count: ${finalAddresses.length} addresses
-
-        This may indicate a contract issue, custom error, or network problem.
-        `.trim());
-      } catch (telegramError) {
-        console.error("Failed to send telegram alert:", telegramError.message);
-      }
-      return;
-    }
-
     let hash;
     try {
       hash = await baseWalletClient.writeContract({
@@ -253,8 +189,10 @@ async function mintBread() {
           Function: batchMint
           Addresses: ${finalAddresses.length}
           Total Amount: ${totalRequestedAmount} tokens
+          Account: ${account.address}
 
-          Transaction failed to submit. This may indicate a custom contract error or network issue.
+          Transaction failed to submit. Bread balances remain in database.
+          This may indicate gas issues, custom contract error, or network issue.
         `.trim());
       } catch (telegramError) {
         console.error("Failed to send telegram alert:", telegramError.message);
