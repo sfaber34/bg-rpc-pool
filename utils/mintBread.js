@@ -22,6 +22,10 @@ async function mintBread() {
       console.error("No private key found in environment variables");
       return;
     }
+    if (!breadContractAddress) {
+      console.error("No bread contract address found in environment variables");
+      return;
+    }
 
     // Get pending bread amounts from database
     const { addresses, amounts } = await getBreadTable();
@@ -92,46 +96,33 @@ async function mintBread() {
 
     console.log(`Total requested: ${totalRequestedAmount}, Available: ${remainingAmountTokens}`);
 
-    let finalMintAmounts;
-    let adjustedData; // For database updates
-    let reductionApplied = false;
-
     if (totalRequestedAmount <= remainingAmountTokens) {
       // Can mint full amounts
-      finalMintAmounts = finalAmounts;
-      adjustedData = originalAddresses.map((addr, i) => ({ address: addr, amount: finalAmounts[i] }));
       console.log('✅ Sufficient batch capacity for all requested amounts');
-    } else if (remainingAmountTokens > 0) {
-      // Apply proportional reduction
-      const reductionFactor = remainingAmountTokens / totalRequestedAmount;
-      finalMintAmounts = finalAmounts.map(amount => amount * reductionFactor);
-      adjustedData = originalAddresses.map((addr, i) => ({ address: addr, amount: finalMintAmounts[i] }));
-      reductionApplied = true;
-      
-      console.log(`⚠️ Applying proportional reduction (${(reductionFactor * 100).toFixed(2)}%) due to limited batch capacity`);
-      console.log(`Reduced total: ${finalMintAmounts.reduce((sum, amount) => sum + amount, 0).toFixed(6)} tokens`);
-      
-      // Send telegram alert about insufficient capacity
-      await sendTelegramAlert(`
-🚨 INSUFFICIENT BATCH MINT CAPACITY
-Total requested: ${totalRequestedAmount} tokens
-Available capacity: ${remainingAmountTokens} tokens
-Applied ${(reductionFactor * 100).toFixed(2)}% proportional reduction to ${finalAddresses.length} addresses.
-      `.trim());
     } else {
-      console.log("❌ No batch mint capacity remaining");
+      // Insufficient capacity - send alert and abort
+      console.log("❌ Insufficient batch mint capacity");
+      try {
+        await sendTelegramAlert(`
+          🚨 INSUFFICIENT BATCH MINT CAPACITY - ABORTING
+          Total requested: ${totalRequestedAmount} tokens
+          Available capacity: ${remainingAmountTokens} tokens
+          Shortfall: ${(totalRequestedAmount - remainingAmountTokens).toFixed(6)} tokens
+
+          Minting aborted. Manual intervention required.
+        `.trim());
+      } catch (telegramError) {
+        console.error("Failed to send telegram alert:", telegramError.message);
+      }
       return;
     }
 
-    const addressesToMint = finalAddresses;
-    const adjustedAmounts = finalMintAmounts;
+    console.log(`✅ Batch capacity check completed. Proceeding to mint to ${finalAddresses.length} addresses.`);
     
-    console.log(`✅ Batch capacity check completed. Proceeding to mint to ${addressesToMint.length} addresses.`);
-    
-    console.log(`Pre-flight checks passed for ${addressesToMint.length}/${addresses.length} addresses.`);
+    console.log(`Pre-flight checks passed for ${finalAddresses.length}/${addresses.length} addresses.`);
 
-    // Scale each amount to 18 decimals
-    const scaledAmounts = adjustedAmounts.map(amount => BigInt(Math.floor(amount * (10 ** 18))));
+    // Scale each amount to 18 decimals  
+    const scaledAmounts = finalAmounts.map(amount => BigInt(Math.floor(amount * (10 ** 18))));
 
     const account = privateKeyToAccount(key);
     const baseWalletClient = createWalletClient({
@@ -140,20 +131,82 @@ Applied ${(reductionFactor * 100).toFixed(2)}% proportional reduction to ${final
       transport: http("https://base-rpc.publicnode.com"),
     });
 
+    // Check gas estimation and ETH balance
+    console.log('Estimating gas and checking ETH balance...');
+    try {
+      const gasEstimate = await basePublicClient.estimateContractGas({
+        address: breadContractAddress,
+        abi: breadContractAbi,
+        functionName: "batchMint",
+        args: [finalAddresses, scaledAmounts],
+        account: account.address,
+      });
+
+      // Get current gas price
+      const gasPrice = await basePublicClient.getGasPrice();
+      const estimatedGasCost = gasEstimate * gasPrice;
+
+      // Check ETH balance
+      const ethBalance = await basePublicClient.getBalance({
+        address: account.address,
+      });
+
+      console.log(`Gas estimate: ${gasEstimate}`);
+      console.log(`Estimated gas cost: ${Number(estimatedGasCost) / (10 ** 18)} ETH`);
+      console.log(`ETH balance: ${Number(ethBalance) / (10 ** 18)} ETH`);
+
+      if (ethBalance < estimatedGasCost) {
+        const shortfall = Number(estimatedGasCost - ethBalance) / (10 ** 18);
+        console.error(`❌ Insufficient ETH for gas. Need ${shortfall.toFixed(6)} more ETH`);
+        
+        try {
+          await sendTelegramAlert(`
+            🚨 INSUFFICIENT ETH FOR GAS - ABORTING MINT
+            Account: ${account.address}
+            ETH Balance: ${(Number(ethBalance) / (10 ** 18)).toFixed(6)} ETH
+            Estimated Gas Cost: ${(Number(estimatedGasCost) / (10 ** 18)).toFixed(6)} ETH
+            Shortfall: ${shortfall.toFixed(6)} ETH
+
+            Minting aborted. Please add ETH to the minter account.
+          `.trim());
+        } catch (telegramError) {
+          console.error("Failed to send telegram alert:", telegramError.message);
+        }
+        return;
+      }
+
+      console.log('✅ Sufficient ETH for gas');
+    } catch (gasError) {
+      console.error("Gas estimation failed:", gasError.message);
+      
+      try {
+        await sendTelegramAlert(`
+        🚨 GAS ESTIMATION FAILED - ABORTING MINT
+        Error: ${gasError.message}
+
+        This may indicate a contract issue or network problem.
+        `.trim());
+      } catch (telegramError) {
+        console.error("Failed to send telegram alert:", telegramError.message);
+      }
+      return;
+    }
+
     const hash = await baseWalletClient.writeContract({
       address: breadContractAddress,
       abi: breadContractAbi,
       functionName: "batchMint",
-      args: [addressesToMint, scaledAmounts],
+              args: [finalAddresses, scaledAmounts],
     });
 
     console.log("🍞 Batch mint transaction submitted");
     console.log("Transaction hash:", hash);
     
-    // Wait for transaction confirmation
+    // Wait for transaction confirmation (5 minute timeout)
     console.log("Waiting for transaction confirmation...");
     const receipt = await basePublicClient.waitForTransactionReceipt({ 
-      hash: hash 
+      hash: hash,
+      timeout: 300_000 // 5 minutes in milliseconds
     });
 
     if (receipt.status === 'success') {
@@ -161,44 +214,87 @@ Applied ${(reductionFactor * 100).toFixed(2)}% proportional reduction to ${final
       
       // Now that minting is confirmed, subtract the amounts from the database
       console.log("Updating database to reflect minted amounts...");
-      await subtractBreadTable(adjustedData);
+      const databaseData = originalAddresses.map((addr, i) => ({ address: addr, amount: finalAmounts[i] }));
+      await subtractBreadTable(databaseData);
       console.log("✅ Database updated successfully");
     } else {
       console.error("❌ Batch mint transaction failed");
+      
+      try {
+        await sendTelegramAlert(`
+          🚨 BATCH MINT TRANSACTION FAILED
+          Transaction Hash: ${hash}
+          Status: Failed
+
+          The batch mint transaction was submitted but failed on-chain. No tokens were minted.
+          Manual investigation required.
+        `.trim());
+      } catch (telegramError) {
+        console.error("Failed to send telegram alert:", telegramError.message);
+      }
+      
       throw new Error("Batch mint transaction failed");
     }
 
     // Complete the batch minting period to reset cooldown
     console.log("Completing batch minting period...");
-    const completionHash = await baseWalletClient.writeContract({
-      address: breadContractAddress,
-      abi: breadContractAbi,
-      functionName: "completeBatchMintingPeriod",
-    });
+    try {
+      const completionHash = await baseWalletClient.writeContract({
+        address: breadContractAddress,
+        abi: breadContractAbi,
+        functionName: "completeBatchMintingPeriod",
+      });
 
-    console.log("Waiting for period completion confirmation...");
-    const completionReceipt = await basePublicClient.waitForTransactionReceipt({ 
-      hash: completionHash 
-    });
+      console.log("Waiting for period completion confirmation...");
+      const completionReceipt = await basePublicClient.waitForTransactionReceipt({ 
+        hash: completionHash,
+        timeout: 300_000 // 5 minutes in milliseconds
+      });
 
-    if (completionReceipt.status === 'success') {
-      console.log("✅ Batch minting period completed. Cooldown reset for next period.");
-    } else {
-      console.error("❌ Period completion failed");
+      if (completionReceipt.status === 'success') {
+        console.log("✅ Batch minting period completed. Cooldown reset for next period.");
+      } else {
+        console.error("❌ Period completion transaction failed");
+        
+        try {
+          await sendTelegramAlert(`
+            🚨 PERIOD COMPLETION TRANSACTION FAILED
+            Mint Hash: ${hash} (SUCCESS)
+            Completion Hash: ${completionHash} (FAILED)
+
+            Batch mint was successful, but period completion failed.
+            Cooldown may not reset for next period - manual intervention required.
+          `.trim());
+        } catch (telegramError) {
+          console.error("Failed to send telegram alert:", telegramError.message);
+        }
+      }
+    } catch (completionError) {
+      console.error("❌ Error during period completion:", completionError.message);
+      
+      try {
+        await sendTelegramAlert(`
+          🚨 PERIOD COMPLETION ERROR
+          Mint Hash: ${hash} (SUCCESS)
+          Error: ${completionError.message}
+
+          Batch mint was successful, but period completion encountered an error.
+          Cooldown may not reset for next period - manual intervention required.
+        `.trim());
+      } catch (telegramError) {
+        console.error("Failed to send telegram alert:", telegramError.message);
+      }
+      
       // Don't throw here - the minting was successful even if period completion failed
     }
 
     console.log("🍞 Bread minting process completed successfully!");
-    console.log(`Minted to ${addressesToMint.length} addresses:`, addressesToMint.map((addr, i) => `${addr}: ${adjustedAmounts[i].toFixed(6)}`));
+    console.log(`Minted to ${finalAddresses.length} addresses:`, finalAddresses.map((addr, i) => `${addr}: ${finalAmounts[i].toFixed(6)}`));
 
     // No need to reset bread table since we already subtracted the minted amounts
     
-    if (reductionApplied) {
-      console.log(`⚠️ Proportional reduction was applied due to limited batch capacity. All ${addressesToMint.length} addresses received reduced amounts.`);
-    }
-    
-    if (addressesToMint.length < addresses.length) {
-      console.log(`${addresses.length - addressesToMint.length} addresses were excluded during pre-flight checks and their pending bread remains in the database`);
+    if (finalAddresses.length < addresses.length) {
+      console.log(`${addresses.length - finalAddresses.length} addresses were excluded during pre-flight checks and their pending bread remains in the database`);
     }
   } catch (error) {
     console.error("Error in mintBread:", error);
