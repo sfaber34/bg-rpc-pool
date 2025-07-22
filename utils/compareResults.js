@@ -85,7 +85,11 @@ function compareResults(responseMap, poolMap, method = 'unknown') {
       
       // Send Telegram alert for simple value mismatch
       const alertMessage = `\n------------------------------------------\n🚨 RPC Response Mismatch Detected!\n\nMethod: ${method}\nMismatched Node: ${result.mismatchedNode}\nNode Owner: ${result.mismatchedOwner}\nMismatch Details: ${result.mismatchedResults.join('\n')}`;
-      sendTelegramAlert(alertMessage);
+      try {
+        sendTelegramAlert(alertMessage);
+      } catch (telegramError) {
+        console.error("❌ Error sending telegram alert:", telegramError.message);
+      }
     } else {
       result.resultsMatch = true;
     }
@@ -153,7 +157,11 @@ function compareResults(responseMap, poolMap, method = 'unknown') {
 
     // Send Telegram alert for object mismatch
     const alertMessage = `\n------------------------------------------\n🚨 RPC Response Mismatch Detected!\n\nMethod: ${method}\nMismatched Node: ${result.mismatchedNode}\nNode Owner: ${result.mismatchedOwner}\nMismatch Details:\n${result.mismatchedResults.join('\n')}`;
-    sendTelegramAlert(alertMessage);
+    try {
+      sendTelegramAlert(alertMessage);
+    } catch (telegramError) {
+      console.error("❌ Error sending telegram alert:", telegramError.message);
+    }
   } else {
     result.resultsMatch = true;
   }
