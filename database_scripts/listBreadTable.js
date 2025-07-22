@@ -55,7 +55,10 @@ async function listBreadTable() {
         console.log(`${row.address}\t\t${row.pending_bread}`);
       });
       
+      // Calculate and print total pending bread
+      const totalPendingBread = result.rows.reduce((sum, row) => sum + Number(row.pending_bread), 0);
       console.log(`\nTotal records: ${result.rows.length}`);
+      console.log(`Total pending bread: ${totalPendingBread}`);
     }
 
     await pool.end();
