@@ -30,11 +30,6 @@ const breadContractAbi = [
   },
   {
     inputs: [],
-    name: "BatchMintingPeriodCompletionPaused",
-    type: "error",
-  },
-  {
-    inputs: [],
     name: "BatchSizeTooLarge",
     type: "error",
   },
@@ -247,6 +242,15 @@ const breadContractAbi = [
     type: "function",
   },
   {
+    inputs: [],
+    name: "PAUSE_DURATION",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
     inputs: [
       { internalType: "address", name: "owner", type: "address" },
       { internalType: "address", name: "spender", type: "address" },
@@ -336,15 +340,6 @@ const breadContractAbi = [
   },
   {
     inputs: [],
-    name: "getOwnerMintRemainingCooldown",
-    outputs: [
-      { internalType: "uint256", name: "", type: "uint256" },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
     name: "getRemainingBatchMintAmount",
     outputs: [
       { internalType: "uint256", name: "", type: "uint256" },
@@ -364,6 +359,24 @@ const breadContractAbi = [
   {
     inputs: [],
     name: "getRemainingOwnerMintAmount",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getRemainingOwnerMintCooldown",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getRemainingPauseTime",
     outputs: [
       { internalType: "uint256", name: "", type: "uint256" },
     ],
