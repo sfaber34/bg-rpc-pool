@@ -75,7 +75,7 @@ async function createBreadTable() {
       await client.query(`
         CREATE TABLE bread (
           address VARCHAR(255) PRIMARY KEY,
-          pending_bread INTEGER NOT NULL DEFAULT 0
+          pending_bread DECIMAL(10,2) NOT NULL DEFAULT 0
         )`);
       
       console.log('Bread table created successfully');

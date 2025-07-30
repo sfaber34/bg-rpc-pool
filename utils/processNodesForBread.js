@@ -1,7 +1,15 @@
 const { updateBreadTable } = require('../database_scripts/updateBreadTable');
+const { getNodeTimingData, isFastNode, fetchNodeTimingData } = require('./nodeTimingUtils');
 
 async function processNodesForBread(poolMap) {
   try {
+    // Ensure we have node timing data
+    const nodeTimingData = getNodeTimingData();
+    if (!nodeTimingData) {
+      console.log('No node timing data available, fetching...');
+      await fetchNodeTimingData();
+    }
+
     // Convert poolMap values to array
     const nodes = Array.from(poolMap.values());
 
@@ -35,17 +43,24 @@ async function processNodesForBread(poolMap) {
       return !isNaN(bn) && maxBlockNumber - bn <= 2;
     });
 
-    // Count nodes per owner
-    const ownerCounts = {};
+    // Calculate bread per owner based on node speed
+    const ownerBread = {};
     for (const node of closeNodes) {
       const owner = node.owner || 'unknown';
-      ownerCounts[owner] = (ownerCounts[owner] || 0) + 1;
+      
+      // Determine bread amount based on node speed
+      const breadAmount = isFastNode(node) ? 1 : 0.25;
+      
+      ownerBread[owner] = (ownerBread[owner] || 0) + breadAmount;
     }
 
     // Prepare result array
-    const result = Object.entries(ownerCounts).map(([owner, count]) => ({ owner, count }));
+    const result = Object.entries(ownerBread).map(([owner, count]) => ({ owner, count }));
 
-    console.log('Owners of nodes within 2 of the highest block_number:', result);
+    console.log('Bread distribution based on node speed (fast nodes: 1 bread/hour, slow nodes: 0.25 bread/hour):');
+    result.forEach(({ owner, count }) => {
+      console.log(`  ${owner}: ${count} bread`);
+    });
 
     if (result.length > 0) {
       // Update the bread table and wait for completion
