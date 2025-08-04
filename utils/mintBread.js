@@ -92,7 +92,7 @@ async function mintBread() {
     );
     
     const finalAddresses = finalValidIndices.map(i => addressValidation.resolvedAddresses[addressValidation.validAddresses.indexOf(i)]);
-    const finalAmounts = finalValidIndices.map(i => amounts[i]);
+    const finalAmounts = finalValidIndices.map(i => parseFloat(amounts[i])); // Convert to numbers
     const originalAddresses = finalValidIndices.map(i => addresses[i]); // Keep track of original addresses for database reset
     
     if (finalAddresses.length === 0) {
