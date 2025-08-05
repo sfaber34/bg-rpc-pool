@@ -37,7 +37,9 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
 
     // Set up timeout for the client
     const timeoutId = setTimeout(() => {
+      // Use atomic check-and-set to prevent race conditions
       if (!hasReceivedResponse) { // Only timeout if we haven't received a response
+        hasReceivedResponse = true; // Mark as received first to prevent race
         // Log timeout error
         logNode(
           { body: rpcRequest },
@@ -49,8 +51,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
           client.owner || 'unknown'
         );
 
-        // Remove the message handler for this client
-        socket.removeAllListeners('rpc_request');
+        // Don't remove listeners since we're using callback pattern
 
         // Resolve with a timeout error
         hasResolved = true;
@@ -72,12 +73,13 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
         return;
       }
 
+      // Use atomic check-and-set to prevent race conditions
       if (hasReceivedResponse) {
         console.error(`Ignoring duplicate response from node ${client.id}`);
         return;
       }
 
-      // Mark as received immediately to prevent race conditions
+      // Atomically mark as received to prevent race conditions
       hasReceivedResponse = true;
       clearTimeout(timeoutId);
 

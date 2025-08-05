@@ -46,10 +46,11 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
 
       // Set up timeout for each client
       const timeoutId = setTimeout(() => {
-        if (!receivedResponseMap.get(clientId)) {  // Only timeout if we haven't received a response
+        // Use atomic check-and-set to prevent race conditions
+        if (!receivedResponseMap.has(clientId)) {  // Only timeout if we haven't received a response
+          receivedResponseMap.set(clientId, true);  // Mark as received first
           pendingResponses--;
           responseMap.set(clientId, { status: 'timeout', time: Date.now() - startTime });
-          receivedResponseMap.set(clientId, true);
           
           // Log timeout error
           logNode(
@@ -62,8 +63,7 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             client.owner || 'unknown'
           );
 
-          // Remove the message handler for this client
-          socket.removeAllListeners('rpc_request');
+          // Don't remove listeners on timeout since we're using callback pattern
 
           // If all responses have timed out and we haven't resolved yet, resolve with an error
           if (pendingResponses === 0 && !hasResolved) {
@@ -80,12 +80,15 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
         }
       }, socketTimeout);
 
-      // Send the request to each client
-      socket.emit('rpc_request', rpcRequest, async (response) => {
-        if (receivedResponseMap.get(clientId)) {
-          // This is a late response after timeout, ignore it
+      // Create a unique response handler for this specific request
+      const responseHandler = async (response) => {
+        // Use atomic check-and-set to prevent race conditions
+        if (receivedResponseMap.has(clientId)) {
+          // This is a late response after timeout or duplicate, ignore it
           return;
         }
+        
+        // Atomically mark as received
         receivedResponseMap.set(clientId, true);
         clearTimeout(timeoutId);
         pendingResponses--;
@@ -200,7 +203,34 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             });
           }
         }
-      });
+
+        // If this was the last pending response, log all responses and resolve if we haven't already
+        if (pendingResponses === 0) {
+          console.log('👍 All responses received');
+
+          const { resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults } = compareResults(responseMap, poolMap, rpcRequest.method);
+          console.log('Results match:', resultsMatch);
+          console.log('Mismatched node:', mismatchedNode);
+          console.log('Mismatched owner:', mismatchedOwner);
+          
+          logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap, rpcRequest.method, rpcRequest.params);
+          
+          if (!hasResolved) {
+            // If we get here and haven't resolved, it means all responses were errors
+            hasResolved = true;
+            resolve({ 
+              status: 'error', 
+              data: {
+                code: -69003,
+                message: "All nodes failed to respond successfully"
+              }
+            });
+          }
+        }
+      };
+
+      // Send the request to each client with callback
+      socket.emit('rpc_request', rpcRequest, responseHandler);
     });
   });
 }
