@@ -203,30 +203,6 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             });
           }
         }
-
-        // If this was the last pending response, log all responses and resolve if we haven't already
-        if (pendingResponses === 0) {
-          console.log('👍 All responses received');
-
-          const { resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults } = compareResults(responseMap, poolMap, rpcRequest.method);
-          console.log('Results match:', resultsMatch);
-          console.log('Mismatched node:', mismatchedNode);
-          console.log('Mismatched owner:', mismatchedOwner);
-          
-          logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismatchedResults, responseMap, poolMap, rpcRequest.method, rpcRequest.params);
-          
-          if (!hasResolved) {
-            // If we get here and haven't resolved, it means all responses were errors
-            hasResolved = true;
-            resolve({ 
-              status: 'error', 
-              data: {
-                code: -69003,
-                message: "All nodes failed to respond successfully"
-              }
-            });
-          }
-        }
       };
 
       // Send the request to each client with callback
