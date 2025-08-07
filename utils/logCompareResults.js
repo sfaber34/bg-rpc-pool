@@ -1,6 +1,15 @@
-const fs = require('fs');
-
 const { compareResultsLogPath } = require('../config');
+const { createBufferedFileLogger } = require('./bufferedFileLogger');
+
+// Module-level buffered logger for compare results
+const compareLogger = createBufferedFileLogger({
+    filePath: compareResultsLogPath,
+    formatRecord: (r) => r,
+    flushIntervalMs: 25,
+    maxBatchSize: 1000,
+    highWatermark: 1000,
+    maxBufferedRecords: 20000,
+});
 
 /**
  * Logs the results of comparing RPC responses from multiple nodes
@@ -32,9 +41,9 @@ function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismat
         } else if (data.status === 'invalid') {
             result = 'invalid';
         } else if (data.status === 'error') {
-            result = data.response?.error ? JSON.stringify(data.response.error).replace(/\|/g, ',') : 'unknown_error';
+            result = data.response?.error ? safeStringify(data.response.error).replace(/\|/g, ',') : 'unknown_error';
         } else if (data.status === 'success' && data.response?.result !== undefined) {
-            result = JSON.stringify(data.response.result).replace(/\|/g, ',');
+            result = safeStringify(data.response.result).replace(/\|/g, ',');
         } else {
             result = 'unknown';
         }
@@ -58,7 +67,7 @@ function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismat
         resultsMatch,
         mismatchedNode,
         mismatchedOwner,
-        mismatchedResults ? JSON.stringify(mismatchedResults).replace(/\|/g, ',') : 'none',
+        mismatchedResults ? safeStringify(mismatchedResults).replace(/\|/g, ',') : 'none',
         nodeResults[0].machineId,
         nodeResults[0].result,
         nodeResults[1].machineId,
@@ -66,15 +75,23 @@ function logCompareResults(resultsMatch, mismatchedNode, mismatchedOwner, mismat
         nodeResults[2].machineId,
         nodeResults[2].result,
         method || 'unknown',
-        params ? JSON.stringify(params).replace(/\|/g, ',') : 'none'
+        params ? safeStringify(params).replace(/\|/g, ',') : 'none'
     ].join('|') + '\n';
 
-    // Write to log file
-    fs.appendFile(compareResultsLogPath, logLine, (err) => {
-        if (err) {
-            console.error('Error writing to compare results log file:', err);
+    // Enqueue line for batched async flush
+    compareLogger.enqueue(logLine);
+}
+
+function safeStringify(obj) {
+    try {
+        return JSON.stringify(obj);
+    } catch (e) {
+        try {
+            return JSON.stringify(String(obj));
+        } catch {
+            return 'unstringifiable';
         }
-    });
+    }
 }
 
 module.exports = { logCompareResults };
