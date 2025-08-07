@@ -14,7 +14,7 @@ const { logCompareResults } = require('./logCompareResults');
 const { addPendingPoints } = require('./pendingPointsManager');
 const { ignoredErrorCodes } = require('../../shared/ignoredErrorCodes');
 
-const { socketTimeout } = require('../config');
+const { nodeDefaultTimeout, nodeMethodSpecificTimeouts } = require('../config');
 
 async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
   const startTime = Date.now();
@@ -40,9 +40,45 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
     let hasResolved = false;  // Flag to track if we've resolved with a response
     let pendingResponses = selectedSocketIds.length;  // Track remaining responses
 
+    // Determine timeout based on RPC method
+    const timeout = nodeMethodSpecificTimeouts[rpcRequest.method] || nodeDefaultTimeout;
+
     selectedSocketIds.forEach(clientId => {
       const client = poolMap.get(clientId);
       const socket = io.sockets.sockets.get(client.wsID);
+
+      // Validate socket exists and is connected
+      if (!socket || socket.disconnected) {
+        console.log(`Socket validation failed for client ${clientId}: socket ${socket ? 'disconnected' : 'not found'}`);
+        pendingResponses--;
+        responseMap.set(clientId, { status: 'socket_error', time: 0 });
+        receivedResponseMap.set(clientId, true);
+        
+        // Log socket error
+        logNode(
+          { body: rpcRequest },
+          startTime,
+          utcTimestamp,
+          0,
+          'socket_error',
+          client.id || 'unknown',
+          client.owner || 'unknown'
+        );
+
+        // If all responses have failed and we haven't resolved yet, resolve with an error
+        if (pendingResponses === 0 && !hasResolved) {
+          hasResolved = true;
+          console.error('All RPC sockets failed validation:', JSON.stringify(Object.fromEntries(responseMap), null, 2));
+          resolve({ 
+            status: 'error', 
+            data: {
+              code: -69007,
+              message: "All nodes have invalid sockets"
+            }
+          });
+        }
+        return; // Skip this client
+      }
 
       // Set up timeout for each client
       const timeoutId = setTimeout(() => {
@@ -78,7 +114,7 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             });
           }
         }
-      }, socketTimeout);
+      }, timeout);
 
       // Send the request to each client
       socket.emit('rpc_request', rpcRequest, async (response) => {

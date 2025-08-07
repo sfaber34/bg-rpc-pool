@@ -1,7 +1,14 @@
 const portPoolPublic = 48546;
 const poolPort = 3003;
 const wsHeartbeatInterval = 30000; // 30 seconds
-const socketTimeout = 500;
+const nodeDefaultTimeout = 500;
+
+// Method-specific timeouts (in milliseconds)
+const nodeMethodSpecificTimeouts = {
+  'eth_getBlockReceipts': 1700,
+  'eth_getBlockByNumber': 1500,
+  'eth_getBlockByHash': 1100
+};
 const pointUpdateInterval = 10000;
 const requestSetChance = 5; // 1 in n requests will be a set request
 // const requestSetChance = 1000000000000; // 1 in n requests will be a set request
@@ -16,7 +23,8 @@ module.exports = {
   portPoolPublic,
   poolPort,
   wsHeartbeatInterval,
-  socketTimeout,
+  nodeDefaultTimeout,
+  nodeMethodSpecificTimeouts,
   pointUpdateInterval,
   requestSetChance,
   spotCheckOnlyThreshold,
