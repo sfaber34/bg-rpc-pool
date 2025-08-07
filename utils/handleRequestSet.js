@@ -98,8 +98,8 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
             client.owner || 'unknown'
           );
 
-          // Remove the message handler for this client
-          socket.removeAllListeners('rpc_request');
+          // Do not remove global 'rpc_request' listeners; ack callbacks are cleaned up automatically
+          // socket.removeAllListeners('rpc_request'); // removed to prevent interfering with other in-flight requests
 
           // If all responses have timed out and we haven't resolved yet, resolve with an error
           if (pendingResponses === 0 && !hasResolved) {
