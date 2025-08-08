@@ -9,7 +9,7 @@
 const { logNode } = require('./logNode');
 const { addPendingPoints } = require('./pendingPointsManager');
 
-const { socketTimeout } = require('../config');
+const { nodeDefaultTimeout, nodeMethodSpecificTimeouts } = require('../config');
 
 async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
   const startTime = Date.now();
@@ -35,6 +35,35 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
     const socket = io.sockets.sockets.get(client.wsID);
     let hasReceivedResponse = false; // Track if the client has responded
 
+    // Validate socket exists and is connected
+    if (!socket || socket.disconnected) {
+      console.log(`Socket validation failed for client ${clientId}: socket ${socket ? 'disconnected' : 'not found'}`);
+      
+      // Log socket error
+      logNode(
+        { body: rpcRequest },
+        startTime,
+        utcTimestamp,
+        0,
+        'socket_error',
+        client.id || 'unknown',
+        client.owner || 'unknown'
+      );
+
+      // Resolve with socket error immediately
+      resolve({ 
+        status: 'error', 
+        data: {
+          code: -69007,
+          message: "Node has invalid socket"
+        }
+      });
+      return;
+    }
+
+    // Determine timeout based on RPC method
+    const timeout = nodeMethodSpecificTimeouts[rpcRequest.method] || nodeDefaultTimeout;
+
     // Set up timeout for the client
     const timeoutId = setTimeout(() => {
       if (!hasReceivedResponse) { // Only timeout if we haven't received a response
@@ -49,8 +78,8 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
           client.owner || 'unknown'
         );
 
-        // Remove the message handler for this client
-        socket.removeAllListeners('rpc_request');
+        // Do not remove global 'rpc_request' listeners; ack callbacks are cleaned up automatically
+        // socket.removeAllListeners('rpc_request'); // removed to prevent interfering with other in-flight requests
 
         // Resolve with a timeout error
         hasResolved = true;
@@ -63,7 +92,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
           }
         });
       }
-    }, socketTimeout);
+    }, timeout);
 
     // Send the request to the client
     socket.emit('rpc_request', rpcRequest, async (response) => {

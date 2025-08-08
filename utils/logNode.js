@@ -1,5 +1,15 @@
-const fs = require('fs');
 const { poolNodeLogPath } = require('../config');
+const { createBufferedFileLogger } = require('./bufferedFileLogger');
+
+// Create a module-level buffered logger for node logs
+const nodeLogger = createBufferedFileLogger({
+  filePath: poolNodeLogPath,
+  formatRecord: (r) => r, // already formatted string lines
+  flushIntervalMs: 25,
+  maxBatchSize: 1000,
+  highWatermark: 1000,
+  maxBufferedRecords: 20000,
+});
 
 /**
  * Logs information about a node's RPC request and response
@@ -20,32 +30,36 @@ function logNode(req, startTime, utcTimestamp, duration, status, machineId = 'un
     .replace('T', ' ')      // Replace T with space
     .replace(/\.\d+Z$/, ''); // Remove milliseconds and Z
 
-  // Format status properly - if it's an object, stringify it, otherwise use as is
-  let cleanStatus;
-  if (typeof status === 'object' && status !== null) {
-    cleanStatus = JSON.stringify(status);
-  } else {
-    cleanStatus = status ? status.toString().replace(/[\r\n\s]+/g, ' ').trim() : 'unknown';
-  }
+  // Lightweight status formatting; defer heavy stringify to the flusher
+  const cleanStatus = (status && typeof status === 'object')
+    ? safeStringify(status)
+    : (status ? String(status).replace(/[\r\n\s]+/g, ' ').trim() : 'unknown');
 
   let logEntry = `${formattedDate}|${startTime}|${machineId}|${owner}|${method}|`;
   
   if (params && Array.isArray(params)) {
     logEntry += params.map(param => {
-      if (typeof param === 'object' && param !== null) {
-        return JSON.stringify(param);
+      if (param && typeof param === 'object') {
+        return safeStringify(param);
       }
       return param;
     }).join(',');
   }
   
   logEntry += `|${duration}|${cleanStatus}\n`;
-  
-  fs.appendFile(poolNodeLogPath, logEntry, (err) => {
-    if (err) {
-      console.error('Error writing to log file:', err);
+  nodeLogger.enqueue(logEntry);
+}
+
+function safeStringify(obj) {
+  try {
+    return JSON.stringify(obj);
+  } catch (e) {
+    try {
+      return JSON.stringify(String(obj));
+    } catch {
+      return 'unstringifiable';
     }
-  });
+  }
 }
 
 module.exports = { logNode };
