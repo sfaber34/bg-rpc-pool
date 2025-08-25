@@ -629,7 +629,12 @@ io.on('connection', (socket) => {
       }
       
       // Check for significant block number deviation and mark as suspicious (only if not already suspicious)
-      if (!isSuspicious && params.block_number && mode) {
+      // Only perform this check after at least 5 nodes with valid block numbers have checked in
+      const validBlockNumberCount = Array.from(poolMap.values())
+        .filter(client => !client.suspicious && client.block_number && client.block_number !== 'SUSPICIOUS')
+        .length;
+      
+      if (!isSuspicious && params.block_number && mode && validBlockNumberCount >= 5) {
         const blockDiff = parseInt(params.block_number) - parseInt(mode);
         if (blockDiff > 2) {
           console.log(`🚨 Suspicious node detected: ${params.id || socket.id} reported block number ${params.block_number} which is ${blockDiff} blocks ahead of the mode (${mode})`);
@@ -644,6 +649,8 @@ io.on('connection', (socket) => {
             suspiciousNodes.delete(socket.id);
           }
         }
+      } else if (!isSuspicious && params.block_number && validBlockNumberCount < 5) {
+        console.log(`⏳ Skipping block number deviation check for ${params.id || socket.id} - only ${validBlockNumberCount} valid nodes, need at least 5`);
       }
       
       // Update pool map with client info, but mark suspicious nodes
