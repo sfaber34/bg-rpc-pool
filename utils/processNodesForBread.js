@@ -1,5 +1,6 @@
 const { updateBreadTable } = require('../database_scripts/updateBreadTable');
 const { getNodeTimingData, isFastNode, fetchNodeTimingData } = require('./nodeTimingUtils');
+const { resolveMultipleEnsToAddresses } = require('./ensResolver');
 
 async function processNodesForBread(poolMap) {
   try {
@@ -54,8 +55,18 @@ async function processNodesForBread(poolMap) {
       ownerBread[owner] = (ownerBread[owner] || 0) + breadAmount;
     }
 
-    // Prepare result array
-    const result = Object.entries(ownerBread).map(([owner, count]) => ({ owner, count }));
+    // Get unique owner names for ENS resolution
+    const uniqueOwners = Object.keys(ownerBread);
+    
+    console.log('Resolving ENS names to addresses...');
+    // Resolve all ENS names to addresses in batch
+    const ownerAddressMap = await resolveMultipleEnsToAddresses(uniqueOwners);
+
+    // Prepare result array with resolved addresses
+    const result = Object.entries(ownerBread).map(([owner, count]) => ({ 
+      owner: ownerAddressMap[owner] || owner, // Use resolved address or fallback to original
+      count 
+    }));
 
     console.log('Bread distribution based on node speed (fast nodes: 1 bread/hour, slow nodes: 0.25 bread/hour):');
     result.forEach(({ owner, count }) => {
