@@ -7,7 +7,6 @@
  * @returns {Promise<Object>} - Promise resolving to the result of the RPC request
  */
 const { logNode } = require('./logNode');
-const { addPendingPoints } = require('./pendingPointsManager');
 
 const { nodeDefaultTimeout, nodeMethodSpecificTimeouts } = require('../config');
 
@@ -168,10 +167,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
         // Resolve with the successful response
         if (!hasResolved) {
           hasResolved = true;
-          // Award points to the owner for a successful response
-          if (client.owner) {
-            addPendingPoints(client.owner, 10);
-          }
+
           resolve({ 
             status: 'success', 
             data: response.result,

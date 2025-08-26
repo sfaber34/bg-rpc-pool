@@ -11,7 +11,6 @@
 const { logNode } = require('./logNode');
 const { compareResults } = require('./compareResults');
 const { logCompareResults } = require('./logCompareResults');
-const { addPendingPoints } = require('./pendingPointsManager');
 const { ignoredErrorCodes } = require('../../shared/ignoredErrorCodes');
 
 const { nodeDefaultTimeout, nodeMethodSpecificTimeouts } = require('../config');
@@ -183,20 +182,12 @@ async function handleRequestSet(rpcRequest, selectedSocketIds, poolMap, io) {
           // Resolve with the first successful response if we haven't already
           if (!hasResolved) {
             hasResolved = true;
-            // Award 10 points to the owner of the fastest response
-            if (client.owner) {
-              addPendingPoints(client.owner, 10);
-            }
+
             resolve({ 
               status: 'success', 
               data: response.result,
               respondingClientId: clientId // Include the responding client ID for cache validation
             });
-          } else {
-            // Award 5 points to subsequent successful responders
-            if (client.owner) {
-              addPendingPoints(client.owner, 5);
-            }
           }
         } else {
           // Handle case where response is valid JSON-RPC but missing both error and result
