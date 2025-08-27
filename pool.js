@@ -744,14 +744,14 @@ setInterval(async () => {
     console.log(`🍞 Bread processing at top of hour: ${now.toISOString()}`);
 
     // At the start of each day (hours === 0)
-    // if (hours === 0 && lastProcessedDay !== dayOfYear) {
-    //   lastProcessedDay = dayOfYear;
-    //   console.log('🍞 Start of day, calling mintBread()');
-    //   try {
-    //     await mintBread();
-    //   } catch (error) {
-    //     console.error('Error in mintBread:', error);
-    //   }
-    // }
+    if (hours === 0 && lastProcessedDay !== dayOfYear) {
+      lastProcessedDay = dayOfYear;
+      console.log('🍞 Start of day, calling mintBread()');
+      try {
+        await mintBread();
+      } catch (error) {
+        console.error('Error in mintBread:', error);
+      }
+    }
   }
 }, 1000);
