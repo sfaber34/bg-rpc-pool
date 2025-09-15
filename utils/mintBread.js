@@ -18,12 +18,17 @@ async function mintBread() {
   try {
     const key = process.env.RPC_BREAD_MINTER_KEY;
     const breadContractAddress = process.env.BREAD_CONTRACT_ADDRESS;
+    const alchemyBaseApiKey = process.env.ALCHEMY_BASE_API_KEY;
     if (!key) {
       console.error("No private key found in environment variables");
       return;
     }
     if (!breadContractAddress) {
       console.error("No bread contract address found in environment variables");
+      return;
+    }
+    if (!alchemyBaseApiKey) {
+      console.error("No Alchemy API key found in environment variables");
       return;
     }
 
@@ -164,7 +169,7 @@ async function mintBread() {
     const baseWalletClient = createWalletClient({
       account,
       chain: base,
-      transport: http("https://base-rpc.publicnode.com"),
+      transport: http(`https://base-mainnet.g.alchemy.com/v2/${alchemyBaseApiKey}`),
     });
 
     // Get the current nonce for the account to prevent nonce errors
@@ -243,6 +248,10 @@ async function mintBread() {
       const databaseData = originalAddresses.map((addr, i) => ({ address: addr, amount: finalAmounts[i] }));
       await subtractBreadTable(databaseData);
       console.log("✅ Database updated successfully");
+      
+      // Wait 15 seconds to ensure contract state is fully updated before calling completeBatchMintingPeriod
+      console.log("⏳ Waiting 15 seconds for contract state to update before completing batch minting period...");
+      await new Promise(resolve => setTimeout(resolve, 15000));
     } else {
       console.error("❌ Batch mint transaction failed");
       
@@ -265,19 +274,15 @@ async function mintBread() {
     // Complete the batch minting period to reset cooldown
     console.log("Completing batch minting period...");
     try {
-      // Get the updated nonce for the completion transaction
-      console.log("Fetching current nonce for period completion...");
-      const completionNonce = await basePublicClient.getTransactionCount({
-        address: account.address,
-        blockTag: 'pending'
-      });
-      console.log(`Current nonce for completion transaction: ${completionNonce}`);
+      // Use sequential nonce (mint nonce + 1) to ensure proper transaction ordering
+      const completionNonce = currentNonce + 1;
+      console.log(`Using sequential nonce for completion transaction: ${completionNonce} (mint nonce + 1)`);
       
       const completionHash = await baseWalletClient.writeContract({
         address: breadContractAddress,
         abi: breadContractAbi,
         functionName: "completeBatchMintingPeriod",
-        nonce: completionNonce, // Explicitly set the nonce
+        nonce: completionNonce, // Use sequential nonce
       });
 
       console.log("Waiting for period completion confirmation...");
