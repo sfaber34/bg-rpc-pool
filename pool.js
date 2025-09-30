@@ -11,6 +11,7 @@ const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
+const { getRpcSiteStatsObject } = require('./utils/getRpcSiteStatsObject');
 const { selectRandomClients } = require('./utils/selectRandomClients');
 const { fetchNodeTimingData } = require('./utils/nodeTimingUtils');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
@@ -254,6 +255,31 @@ const wsServerInternal = require('https').createServer(
       res.end(response);
     } catch (error) {
       console.error('Error in /nodeContinents endpoint:', error);
+      const errorResponse = JSON.stringify({
+        error: 'Internal server error',
+        message: error.message
+      });
+      res.writeHead(500, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(errorResponse)
+      });
+      res.end(errorResponse);
+    }
+    return;
+  }
+
+  if (req.url === '/rpcSiteStats' && req.method === 'GET') {
+    try {
+      const rpcSiteStatsData = getRpcSiteStatsObject(poolMap);
+      
+      const response = JSON.stringify(rpcSiteStatsData);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(response)
+      });
+      res.end(response);
+    } catch (error) {
+      console.error('Error in /rpcSiteStats endpoint:', error);
       const errorResponse = JSON.stringify({
         error: 'Internal server error',
         message: error.message
