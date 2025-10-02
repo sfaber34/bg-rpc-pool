@@ -6,12 +6,14 @@ const WebSocket = require('ws');
 const { updateLocationTable } = require('./database_scripts/updateLocationTable');
 const { getOwnerPoints } = require('./database_scripts/getOwnerPoints');
 const { getOwnerPendingBread } = require('./database_scripts/getOwnerPendingBread');
+const { getEnsNamesByAddress } = require('./database_scripts/getEnsNamesByAddress');
 const { getEnodesObject } = require('./utils/getEnodesObject');
 const { getPeerIdsObject } = require('./utils/getPeerIdsObject');
 const { getConsensusPeerAddrObject } = require('./utils/getConsensusPeerAddrObject');
 const { getPoolNodesObject } = require('./utils/getPoolNodesObject');
 const { constructNodeContinentsObject, getNodeContinentsObject } = require('./utils/getNodeContinentsObject');
 const { getRpcSiteStatsObject } = require('./utils/getRpcSiteStatsObject');
+const { getYourNodesObject } = require('./utils/getYourNodesObject');
 const { selectRandomClients } = require('./utils/selectRandomClients');
 const { fetchNodeTimingData } = require('./utils/nodeTimingUtils');
 const { handleRequestSingle } = require('./utils/handleRequestSingle');
@@ -280,6 +282,53 @@ const wsServerInternal = require('https').createServer(
       res.end(response);
     } catch (error) {
       console.error('Error in /rpcSiteStats endpoint:', error);
+      const errorResponse = JSON.stringify({
+        error: 'Internal server error',
+        message: error.message
+      });
+      res.writeHead(500, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(errorResponse)
+      });
+      res.end(errorResponse);
+    }
+    return;
+  }
+
+  if (req.url.startsWith('/yournodes') && req.method === 'GET') {
+    try {
+      // Parse query parameters
+      const url = new URL(req.url, `https://${req.headers.host}`);
+      const owner = url.searchParams.get('owner');
+      
+      if (!owner) {
+        const errorResponse = JSON.stringify({
+          error: 'Missing required parameter',
+          message: 'Owner address is required'
+        });
+        res.writeHead(400, {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(errorResponse)
+        });
+        res.end(errorResponse);
+        return;
+      }
+
+      // Query ENS table to find all ENS names associated with this address
+      const ensNames = await getEnsNamesByAddress(owner);
+      console.log(`Found ${ensNames.length} ENS name(s) for address ${owner}:`, ensNames);
+
+      // Get node data, matching by both address and ENS names
+      const yourNodesData = getYourNodesObject(poolMap, owner, ensNames);
+      
+      const response = JSON.stringify(yourNodesData);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(response)
+      });
+      res.end(response);
+    } catch (error) {
+      console.error('Error in /yournodes endpoint:', error);
       const errorResponse = JSON.stringify({
         error: 'Internal server error',
         message: error.message
