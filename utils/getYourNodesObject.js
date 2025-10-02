@@ -1,20 +1,38 @@
 /**
- * Extracts the node ID prefix (part before the first dash)
- * Example: "bgbasenode-48:21:0b:6c:ad:f6-linux-x64" -> "bgbasenode"
+ * Extracts the node name (part before the MAC address)
+ * Example: "nuc-M26147-406-48:21:0b:36:43:4b-linux-x64" -> "nuc-M26147-406"
  * @param {string} fullNodeId - The full node ID string
- * @returns {string} The node ID prefix
+ * @returns {string} The node name
  */
 function extractNodeIdPrefix(fullNodeId) {
   if (!fullNodeId || typeof fullNodeId !== 'string') {
     return '';
   }
   
-  const firstDashIndex = fullNodeId.indexOf('-');
-  if (firstDashIndex === -1) {
-    return fullNodeId;
+  // MAC address pattern: 6 groups of 2 hex digits separated by colons
+  // Pattern: XX:XX:XX:XX:XX:XX where X is a hex digit (0-9, a-f, A-F)
+  const macAddressPattern = /[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}/;
+  
+  const macMatch = fullNodeId.match(macAddressPattern);
+  if (!macMatch) {
+    // If no MAC address found, fall back to original behavior (before first dash)
+    const firstDashIndex = fullNodeId.indexOf('-');
+    if (firstDashIndex === -1) {
+      return fullNodeId;
+    }
+    return fullNodeId.substring(0, firstDashIndex);
   }
   
-  return fullNodeId.substring(0, firstDashIndex);
+  // Find the start of the MAC address
+  const macStartIndex = macMatch.index;
+  
+  // Look for the dash immediately before the MAC address
+  let nodeNameEndIndex = macStartIndex;
+  if (nodeNameEndIndex > 0 && fullNodeId[nodeNameEndIndex - 1] === '-') {
+    nodeNameEndIndex--;
+  }
+  
+  return fullNodeId.substring(0, nodeNameEndIndex);
 }
 
 /**
