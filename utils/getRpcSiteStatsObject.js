@@ -18,17 +18,29 @@ function getRpcSiteStatsObject(poolMap) {
             return stats;
         }
 
-        // Count only non-suspicious nodes
+        // Count only non-suspicious nodes with valid execution and consensus clients
         for (const [_, nodeData] of poolMap) {
             // Skip suspicious nodes
             if (nodeData.suspicious) {
                 continue;
             }
 
-            stats.nodesOnline++;
+            // Check if both execution and consensus clients are valid (not N/A, null, or empty)
+            const hasValidExecutionClient = nodeData.execution_client && 
+                nodeData.execution_client !== 'N/A' && 
+                nodeData.execution_client.trim() !== '';
+            
+            const hasValidConsensusClient = nodeData.consensus_client && 
+                nodeData.consensus_client !== 'N/A' && 
+                nodeData.consensus_client.trim() !== '';
 
-            // Process execution client
-            if (nodeData.execution_client) {
+            // Only count as online if both clients are valid
+            if (hasValidExecutionClient && hasValidConsensusClient) {
+                stats.nodesOnline++;
+            }
+
+            // Process execution client (only if valid)
+            if (hasValidExecutionClient) {
                 const executionClientName = stripVersion(nodeData.execution_client);
                 if (executionClientName) {
                     stats.executionClients[executionClientName] = 
@@ -36,8 +48,8 @@ function getRpcSiteStatsObject(poolMap) {
                 }
             }
 
-            // Process consensus client
-            if (nodeData.consensus_client) {
+            // Process consensus client (only if valid)
+            if (hasValidConsensusClient) {
                 const consensusClientName = stripVersion(nodeData.consensus_client);
                 if (consensusClientName) {
                     stats.consensusClients[consensusClientName] = 
