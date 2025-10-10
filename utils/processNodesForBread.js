@@ -4,10 +4,10 @@ const { resolveMultipleEnsToAddresses } = require('./ensResolver');
 
 async function processNodesForBread(poolMap) {
   try {
-    // Ensure we have node timing data
+    // Ensure we have node timeout percentage data
     const nodeTimingData = getNodeTimingData();
     if (!nodeTimingData) {
-      console.log('No node timing data available, fetching...');
+      console.log('No node timeout data available, fetching...');
       await fetchNodeTimingData();
     }
 

@@ -65,14 +65,17 @@ const poolMap = new Map();
 let breadProcessingCounter = 0;
 
 const seenNodes = new Set(); // Track nodes we've already processed
-const processedTimingNodes = new Set(); // Track nodes we've already processed for timing data
-const pendingTimingSockets = new Set(); // Track socket IDs that need timing data once they get a valid node ID
 const suspiciousNodes = new Set(); // Track nodes reporting suspicious block numbers
 
-// Set up daily fetch
+// Fetch node timeout data immediately on startup
+fetchNodeTimingData().catch(error => {
+  console.error('Error in initial fetchNodeTimingData:', error.message);
+});
+
+// Set up hourly fetch of node timeout data
 setInterval(() => {
   fetchNodeTimingData().catch(error => {
-    console.error('Error in daily fetchNodeTimingData:', error.message);
+    console.error('Error in hourly fetchNodeTimingData:', error.message);
   });
 }, nodeTimingFetchInterval);
 
@@ -99,7 +102,6 @@ setInterval(() => {
     if (shouldRemove) {
       console.log(`Removing ${reason} connection: socket ${socketId}, machine_id: ${client.machine_id || 'unknown'}`);
       poolMap.delete(socketId);
-      pendingTimingSockets.delete(socketId);
       suspiciousNodes.delete(socketId);
     }
   }
@@ -658,9 +660,6 @@ io.on('connection', (socket) => {
   poolMap.set(socket.id, client);
   socket.emit('init', { id: socket.id });
   
-  // Add socket to pending timing set when it first connects
-  pendingTimingSockets.add(socket.id);
-
   // Handle checkin messages
   socket.on('checkin', async (message) => {
     try {
@@ -681,7 +680,6 @@ io.on('connection', (socket) => {
           if (socketId !== socket.id && client.machine_id === machineId) {
             console.log(`Removing duplicate entry for machine_id ${machineId} (socket ${socketId})`);
             poolMap.delete(socketId);
-            pendingTimingSockets.delete(socketId);
             suspiciousNodes.delete(socketId);
           }
         }
@@ -754,21 +752,6 @@ io.on('connection', (socket) => {
         });
       }
       
-      // Check if this socket was pending timing data and now has a valid machine ID
-      if (pendingTimingSockets.has(socket.id) && 
-          machineId && 
-          machineId !== "N/A" && 
-          machineId !== null && 
-          machineId !== undefined) {
-        pendingTimingSockets.delete(socket.id);
-        if (!processedTimingNodes.has(machineId)) {
-          processedTimingNodes.add(machineId);
-          fetchNodeTimingData().catch(err => {
-            console.error('Error updating node timing data:', err);
-          });
-        }
-      }
-      
       // Only call updateLocationTable for new nodes
       if (params.enode && !seenNodes.has(params.enode)) {
         seenNodes.add(params.enode);
@@ -794,7 +777,6 @@ io.on('connection', (socket) => {
       console.log(`Removing socket ${socket.id} for machine_id: ${client.machine_id}`);
     }
     poolMap.delete(socket.id);
-    pendingTimingSockets.delete(socket.id);
     suspiciousNodes.delete(socket.id);
   });
 });

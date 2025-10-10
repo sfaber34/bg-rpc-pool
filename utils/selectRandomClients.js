@@ -8,10 +8,10 @@ const { getNodeTimingData, filterFastNodes, filterSlowNodes, spotCheckOnlyThresh
 function hasValidNodeId(client) {
   return client && 
          client.wsID && 
-         client.node_id && 
-         client.node_id !== "N/A" && 
-         client.node_id !== null && 
-         client.node_id !== undefined;
+         client.id && 
+         client.id !== "N/A" && 
+         client.id !== null && 
+         client.id !== undefined;
 }
 
 /**
@@ -29,12 +29,12 @@ function hasValidNodeId(client) {
 function selectRandomClients(poolMap) {
   console.log('Starting selectRandomClients with pool size:', poolMap.size);
   
-  // Get current timing data
+  // Get current timeout percentage data
   const nodeTimingLastWeek = getNodeTimingData();
   
-  // Log the timing data if available
+  // Log the timeout data if available
   if (nodeTimingLastWeek) {
-    console.log('Node timing data:');
+    console.log('Node timeout percentage data:');
     Object.entries(nodeTimingLastWeek).forEach(([key, value]) => {
       console.log(`  ${key}: ${value}`);
     });
@@ -89,15 +89,25 @@ function selectRandomClients(poolMap) {
     return [];
   }
 
-  // Determine highest block from fast nodes only (if timing data is available)
+  // Determine highest block from fast nodes only (if timeout data is available)
   let targetBlock;
   let fastClientsWithBlocks = clientsWithBlocks;
   
   if (nodeTimingLastWeek) {
-    // Separate fast and slow nodes
+    // Separate fast and slow nodes based on timeout percentage
     fastClientsWithBlocks = filterFastNodes(clientsWithBlocks);
+    const slowClientsWithBlocks = filterSlowNodes(clientsWithBlocks);
     
-    console.log('Fast clients with valid blocks:', fastClientsWithBlocks.length);
+    // Log node classification
+    console.log(`Node classification - Fast: ${fastClientsWithBlocks.length}, Slow: ${slowClientsWithBlocks.length}`);
+    fastClientsWithBlocks.forEach(client => {
+      const timeout = nodeTimingLastWeek[client.id];
+      console.log(`  Fast: ${client.id} (timeout: ${timeout !== undefined ? timeout.toFixed(3) : 'N/A'})`);
+    });
+    slowClientsWithBlocks.forEach(client => {
+      const timeout = nodeTimingLastWeek[client.id];
+      console.log(`  Slow: ${client.id} (timeout: ${timeout !== undefined ? timeout.toFixed(3) : 'N/A'})`);
+    });
     
     // If we have fast nodes, use their highest block as target
     if (fastClientsWithBlocks.length > 0) {
@@ -110,9 +120,9 @@ function selectRandomClients(poolMap) {
       console.log('Highest block number from all nodes:', targetBlock);
     }
   } else {
-    // No timing data available, use highest block from all nodes
+    // No timeout data available, use highest block from all nodes
     targetBlock = Math.max(...clientsWithBlocks.map(client => parseInt(client.block_number)));
-    console.log('Highest block number (no timing data):', targetBlock);
+    console.log('Highest block number (no timeout data):', targetBlock);
   }
 
   // Filter clients at the target block
