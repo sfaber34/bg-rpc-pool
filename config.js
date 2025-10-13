@@ -12,8 +12,8 @@ const nodeMethodSpecificTimeouts = {
 };
 const pointUpdateInterval = 10000;
 // const requestSetChance = 5; // 1 in n requests will be a set request
-const requestSetChance = 1000000000000; // 1 in n requests will be a set request
-const spotCheckOnlyThreshold = 0.4; // The timeout percentage threshold (0-1) that excludes nodes from handling single requests (e.g., 0.5 = 50% timeout rate)
+const requestSetChance = 20; // 1 in n requests will be a set request
+const spotCheckOnlyThreshold = 0.2; // The timeout percentage threshold (0-1) that excludes nodes from handling single requests (e.g., 0.5 = 50% timeout rate)
 const nodeTimingFetchInterval = 60 * 60 * 1000; // Interval for fetching node timeout data (1 hour)
 const poolNodeStaleThreshold = 5 * 60 * 1000; // 5 minutes Timeout threshold for stale nodes in poolMap
 
