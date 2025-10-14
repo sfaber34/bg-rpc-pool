@@ -3,50 +3,55 @@ const { spotCheckOnlyThreshold } = require('../config');
 
 const host = process.env.HOST;
 
-// Module-level variable to store timing data
-let nodeTimingLastWeek = null;
+// Module-level variable to store timeout percentage data
+let nodeTimeoutData = null;
 let lastFetchTime = null;
 
 /**
- * Fetches node timing data from the API
+ * Fetches node timeout percentage data from the API
  * @returns {Promise<void>}
  */
 async function fetchNodeTimingData() {
   try {
-    const response = await axios.get(`https://${host}:3001/nodeTimingLastWeek`);
-    nodeTimingLastWeek = response.data; // Store by machine_id
+    const response = await axios.get(`https://${host}:3001/nodeTimeoutPercentLastWeek`);
+    // Convert array to object keyed by nodeId for faster lookup
+    const dataArray = response.data;
+    nodeTimeoutData = {};
+    dataArray.forEach(node => {
+      nodeTimeoutData[node.nodeId] = node.percentTimeout;
+    });
     lastFetchTime = Date.now();
-    // Log the timing data without quotes in keys
-    console.log('Node timing data fetched:');
-    Object.entries(nodeTimingLastWeek).forEach(([key, value]) => {
+    // Log the timeout data
+    console.log('Node timeout data fetched:');
+    Object.entries(nodeTimeoutData).forEach(([key, value]) => {
       console.log(`  ${key}: ${value}`);
     });
   } catch (error) {
-    console.error('Error fetching node timing data:', error.message);
+    console.error('Error fetching node timeout data:', error.message);
   }
 }
 
 /**
- * Gets the current node timing data
- * @returns {Object|null} The timing data object or null if not available
+ * Gets the current node timeout data
+ * @returns {Object|null} The timeout data object or null if not available
  */
 function getNodeTimingData() {
-  return nodeTimingLastWeek;
+  return nodeTimeoutData;
 }
 
 /**
- * Determines if a node is considered "fast" based on timing data
- * @param {Object} client - The client object with machine_id
- * @returns {boolean} True if the node is fast (timing undefined or <= threshold)
+ * Determines if a node is considered "fast" based on timeout percentage
+ * @param {Object} client - The client object with id property
+ * @returns {boolean} True if the node is fast (percentTimeout undefined or <= threshold)
  */
 function isFastNode(client) {
-  if (!nodeTimingLastWeek || !client.machine_id || client.machine_id === "N/A") {
-    return true; // Consider fast if no timing data or no machine_id
+  if (!nodeTimeoutData || !client.id || client.id === "N/A") {
+    return true; // Consider fast if no timeout data or no id
   }
   
-  const timing = nodeTimingLastWeek[client.machine_id];
-  // Consider fast if timing is undefined or <= threshold
-  return timing === undefined || timing <= spotCheckOnlyThreshold;
+  const percentTimeout = nodeTimeoutData[client.id];
+  // Consider fast if percentTimeout is undefined or <= threshold
+  return percentTimeout === undefined || percentTimeout <= spotCheckOnlyThreshold;
 }
 
 /**

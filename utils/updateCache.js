@@ -86,10 +86,10 @@ function broadcastUpdate(wssCache, method, params, value, timestamp = Date.now()
 // Update cache based on pool map
 async function updateCache(wssCache, poolMap, io) {
   try {
-    // Get current timing data
+    // Get current timeout percentage data
     const nodeTimingLastWeek = getNodeTimingData();
     
-    // Find the largest block number from fast nodes only (if timing data available)
+    // Find the largest block number from fast nodes only (if timeout data available)
     let maxBlockNumber = null;
     let fastNodesExist = false;
 
@@ -103,13 +103,13 @@ async function updateCache(wssCache, poolMap, io) {
       if (isValidBlockNumber(blockNumber)) {
         const numBlockNumber = Number(blockNumber);
         
-        // Check if this is a fast node (or if no timing data available, consider all nodes)
+        // Check if this is a fast node (or if no timeout data available, consider all nodes)
         const isNodeFast = isFastNode(nodeData);
         if (isNodeFast) {
           fastNodesExist = true;
         }
         
-        // Only consider this node if it's fast (or if no timing data available)
+        // Only consider this node if it's fast (or if no timeout data available)
         if (isNodeFast || !nodeTimingLastWeek) {
           if (maxBlockNumber === null || numBlockNumber > maxBlockNumber) {
             maxBlockNumber = numBlockNumber;
@@ -118,7 +118,7 @@ async function updateCache(wssCache, poolMap, io) {
       }
     }
 
-    // If no fast nodes exist but timing data is available, fall back to all nodes (excluding suspicious)
+    // If no fast nodes exist but timeout data is available, fall back to all nodes (excluding suspicious)
     if (nodeTimingLastWeek && !fastNodesExist) {
       console.log('No fast nodes available, falling back to all non-suspicious nodes for cache update');
       for (const [nodeId, nodeData] of poolMap.entries()) {
