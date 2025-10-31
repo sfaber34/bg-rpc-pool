@@ -13,9 +13,9 @@ const RDS_CA_BUNDLE_PATH = '/home/ubuntu/shared/rds-ca-bundle.pem';
 async function updateLocationTable(enode) {
   let pool;
   try {
-    if (!process.env.RDS_SECRET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.DB_HOST) {
+    if (!process.env.RDS_SECRET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.DB_HOST || !process.env.PRO_IP_KEY) {
       console.error('Required environment variables are missing. Please check your .env file.');
-      console.error('Required: RDS_SECRET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DB_HOST');
+      console.error('Required: RDS_SECRET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DB_HOST, PRO_IP_KEY');
       return;
     }
 
@@ -62,7 +62,7 @@ async function updateLocationTable(enode) {
     
     if (existingRecord.rows.length === 0) {
       // IP doesn't exist, fetch continent data
-      const apiResponse = await axios.get(`https://pro.ip-api.com/json/${ip}?fields=continent&key=xCoYoyXtdmYbpvJ`);
+      const apiResponse = await axios.get(`https://pro.ip-api.com/json/${ip}?fields=continent&key=${process.env.PRO_IP_KEY}`);
       const { continent } = apiResponse.data;
       
       // Insert new record
