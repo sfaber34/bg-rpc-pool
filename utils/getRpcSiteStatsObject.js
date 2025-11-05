@@ -76,6 +76,7 @@ function getRpcSiteStatsObject(poolMap) {
  *   "geth/v1.13.0" -> "geth"
  *   "lighthouse v5.3.0" -> "lighthouse"
  *   "Nethermind/v1.25.4" -> "Nethermind"
+ *   "prysm vnull" -> "prysm"
  * @param {string} clientString - The client string with version info
  * @returns {string} The client name without version
  */
@@ -86,6 +87,9 @@ function stripVersion(clientString) {
 
     // Trim whitespace
     let clientName = clientString.trim();
+
+    // Remove "vnull" patterns (e.g., "prysm vnull" -> "prysm")
+    clientName = clientName.replace(/[\s\/]vnull$/i, '');
 
     // Remove version patterns like "v1.8.1", "/v1.13.0", " v5.3.0", etc.
     // This regex handles: space or slash, optional 'v', version numbers
