@@ -26,7 +26,7 @@ const { getBlockNumberMode } = require('./utils/getBlockNumberMode');
 const { sendTelegramAlert } = require('./utils/telegramUtils');
 const { isMachineIdSuspicious, extractMacAddressFromMachineId, getSuspiciousMacAddresses, reloadSuspiciousMacAddresses } = require('./utils/suspiciousMacChecker');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold } = require('./config');
+const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold, methodsToSkipComparison } = require('./config');
 
 // Map of RPC methods that can be cached with their block number parameter positions
 const cacheableMethods = new Map([  
@@ -492,8 +492,8 @@ const wsServerInternal = require('https').createServer(
             return;
           } else if (selectedClients.length < 3) {
             result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
-          } else if (rpcRequest.method === 'eth_blockNumber') {
-            console.log(`Using handleRequestSingle for eth_blockNumber method`);
+          } else if (methodsToSkipComparison.includes(rpcRequest.method)) {
+            console.log(`Using handleRequestSingle for ${rpcRequest.method} (skips comparison)`);
             result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
           } else {
             const useSetHandler = Math.floor(Math.random() * requestSetChance) === 0;
