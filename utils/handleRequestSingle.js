@@ -1,7 +1,7 @@
 /**
- * Handles a single JSON-RPC request by sending it to one client
+ * Handles a single JSON-RPC request by sending it to one client, with retry on timeout
  * @param {Object} rpcRequest - The JSON-RPC request object
- * @param {Array} selectedSocketIds - Array of socket IDs to send the request to
+ * @param {Array} selectedSocketIds - Array of socket IDs to send the request to (up to 3)
  * @param {Map} poolMap - Map containing all connected clients 
  * @param {Object} io - Socket.IO instance
  * @returns {Promise<Object>} - Promise resolving to the result of the RPC request
@@ -24,9 +24,40 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
     };
   }
 
-  // Get the single client ID
-  const clientId = selectedSocketIds[0];
+  // Try first node
+  const firstResult = await tryNode(rpcRequest, selectedSocketIds[0], poolMap, io, startTime, utcTimestamp);
+  
+  // If first node succeeded or failed with non-timeout error, return immediately
+  if (firstResult.status === 'success' || firstResult.data.code !== -69005) {
+    return firstResult;
+  }
+  
+  // First node timed out - check if we have a second node to try
+  if (selectedSocketIds.length > 1) {
+    console.log(`🔄 First node timed out, retrying with second node...`);
+    const secondResult = await tryNode(rpcRequest, selectedSocketIds[1], poolMap, io, startTime, utcTimestamp);
+    return secondResult;
+  }
+  
+  // No second node available, return the timeout error
+  console.log(`❌ First node timed out and no second node available`);
+  return firstResult;
+}
 
+/**
+ * Attempts to send an RPC request to a single node
+ * @param {Object} rpcRequest - The JSON-RPC request object
+ * @param {string} clientId - Socket ID of the client to send the request to
+ * @param {Map} poolMap - Map containing all connected clients 
+ * @param {Object} io - Socket.IO instance
+ * @param {number} startTime - Timestamp when the overall request started (for UTC timestamp)
+ * @param {string} utcTimestamp - UTC timestamp string
+ * @returns {Promise<Object>} - Promise resolving to the result of the RPC request
+ */
+async function tryNode(rpcRequest, clientId, poolMap, io, startTime, utcTimestamp) {
+  // Track this specific node attempt's start time for accurate duration logging
+  const nodeStartTime = Date.now();
+  
   // Create a promise that will resolve with the response or error if it times out
   return new Promise((resolve, reject) => {
     let hasResolved = false; // Flag to track if we've resolved with a response
@@ -41,7 +72,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
       // Log socket error
       logNode(
         { body: rpcRequest },
-        startTime,
+        nodeStartTime,
         utcTimestamp,
         0,
         'socket_error',
@@ -69,9 +100,9 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
         // Log timeout error
         logNode(
           { body: rpcRequest },
-          startTime,
+          nodeStartTime,
           utcTimestamp,
-          Date.now() - startTime,
+          Date.now() - nodeStartTime,
           'timeout_error',
           client.id || 'unknown',
           client.owner || 'unknown'
@@ -109,15 +140,15 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
       hasReceivedResponse = true;
       clearTimeout(timeoutId);
 
-      // Now process the response
-      const responseTime = Date.now() - startTime;
+      // Now process the response - use nodeStartTime for accurate duration
+      const responseTime = Date.now() - nodeStartTime;
 
       // Validate response format first
       if (!response || typeof response !== 'object' || response.jsonrpc !== '2.0') {
         console.error(`Invalid JSON-RPC response format from node ${client.id}:`, response);
         logNode(
           { body: rpcRequest },
-          startTime,
+          nodeStartTime,
           utcTimestamp,
           responseTime,
           'invalid_format',
@@ -138,7 +169,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
       } else if (response.error) {
         logNode(
           { body: rpcRequest },
-          startTime,
+          nodeStartTime,
           utcTimestamp,
           responseTime,
           response.error,
@@ -156,7 +187,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
       } else if (response.result !== undefined) {
         logNode(
           { body: rpcRequest },
-          startTime,
+          nodeStartTime,
           utcTimestamp,
           responseTime,
           'success',
@@ -179,7 +210,7 @@ async function handleRequestSingle(rpcRequest, selectedSocketIds, poolMap, io) {
         console.error(`Invalid JSON-RPC response from node ${client.id}: neither error nor result present:`, response);
         logNode(
           { body: rpcRequest },
-          startTime,
+          nodeStartTime,
           utcTimestamp,
           responseTime,
           'invalid_response',
