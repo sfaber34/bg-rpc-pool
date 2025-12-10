@@ -33,12 +33,12 @@ function selectRandomClients(poolMap) {
   const nodeTimingLastWeek = getNodeTimingData();
   
   // Log the timeout data if available
-  if (nodeTimingLastWeek) {
-    console.log('Node timeout percentage data:');
-    Object.entries(nodeTimingLastWeek).forEach(([key, value]) => {
-      console.log(`  ${key}: ${value}`);
-    });
-  }
+  // if (nodeTimingLastWeek) {
+  //   console.log('Node timeout percentage data:');
+  //   Object.entries(nodeTimingLastWeek).forEach(([key, value]) => {
+  //     console.log(`  ${key}: ${value}`);
+  //   });
+  // }
 
   // Get all clients and filter those that have properly checked in
   const clients = Array.from(poolMap.values());
