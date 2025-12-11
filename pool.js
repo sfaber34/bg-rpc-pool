@@ -468,10 +468,10 @@ const wsServerInternal = require('https').createServer(
             const useSetHandler = Math.floor(Math.random() * requestSetChance) === 0;
             
             if (useSetHandler) {
-              console.log(`Randomly selected handleRequestSet (1/${requestSetChance} probability)`);
+              console.log(`🖖 Randomly selected handleRequestSet (1/${requestSetChance} probability)`);
               result = await handleRequestSet(rpcRequest, selectedClients, poolMap, io);
             } else {
-              console.log(`Randomly selected handleRequestSingle (${requestSetChance-1}/${requestSetChance} probability)`);
+              console.log(`☝️ Randomly selected handleRequestSingle (${requestSetChance-1}/${requestSetChance} probability)`);
               result = await handleRequestSingle(rpcRequest, selectedClients, poolMap, io);
             }
           }
@@ -496,7 +496,7 @@ const wsServerInternal = require('https').createServer(
 
                       // Check if method is cacheable and block number is a hex value
           const method = rpcRequest.method;
-          console.log(`💾 Method: ${method}`);
+          console.log(`🧮 Method: ${method}`);
           if (cacheableMethods.has(method) && shouldCache) {
             console.log(`💾 Is cacheable method and responding node is not suspicious`);
             
@@ -514,9 +514,9 @@ const wsServerInternal = require('https').createServer(
                 broadcastUpdate(wssCache, method, params, result.data);
               } else {
                 const blockNumber = params[blockNumberPosition];
-                console.log(`💾 Block number position: ${blockNumberPosition}`);
-                console.log(`💾 Params: ${params}`);
-                console.log(`💾 Block number: ${blockNumber}`);
+                console.log(`📍 Block number position: ${blockNumberPosition}`);
+                console.log(`🎛️ Params: ${params}`);
+                console.log(`🧱 Block number: ${blockNumber}`);
                 
                 // Check if blockNumber is a hex value (not a keyword)
                 if (blockNumber && typeof blockNumber === 'string' && 
@@ -712,7 +712,7 @@ io.on('connection', (socket) => {
       }
       
       poolMap.set(socket.id, clientData);
-      console.log(`Updated client ${socket.id}, id: ${params.id}, block_number: ${isSuspicious ? 'SUSPICIOUS' : params.block_number}, suspicious: ${isSuspicious}${suspiciousReason ? ` (reason: ${suspiciousReason})` : ''}`);
+      console.log(`🛜 Updated node ${socket.id}, id: ${params.id}, block_number: ${isSuspicious ? 'SUSPICIOUS' : params.block_number}, suspicious: ${isSuspicious}${suspiciousReason ? ` (reason: ${suspiciousReason})` : ''}`);
       
       // Update cache immediately when a non-suspicious node checks in with new block number.
       if (params.block_number && !isSuspicious) {
@@ -756,28 +756,28 @@ let lastProcessedDay = -1;
 
 // New interval function that uses the system clock for scheduling
 // don't delete this
-// setInterval(async () => {
-//   const now = new Date();
-//   const hours = now.getHours();
-//   const minutes = now.getMinutes();
-//   const seconds = now.getSeconds();
-//   const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+setInterval(async () => {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
 
-//   // At the top of every hour (minutes === 0 and within first 3 seconds for safety)
-//   if (minutes === 0 && seconds <= 2 && lastProcessedHour !== hours) {
-//     lastProcessedHour = hours;
-//     await processNodesForBread(poolMap);
-//     console.log(`🍞 Bread processing at top of hour: ${now.toISOString()}`);
+  // At the top of every hour (minutes === 0 and within first 3 seconds for safety)
+  if (minutes === 0 && seconds <= 2 && lastProcessedHour !== hours) {
+    lastProcessedHour = hours;
+    await processNodesForBread(poolMap);
+    console.log(`🍞 Bread processing at top of hour: ${now.toISOString()}`);
 
-//     // At the start of each day (hours === 0)
-//     if (hours === 0 && lastProcessedDay !== dayOfYear) {
-//       lastProcessedDay = dayOfYear;
-//       console.log('🍞 Start of day, calling mintBread()');
-//       try {
-//         await mintBread();
-//       } catch (error) {
-//         console.error('Error in mintBread:', error);
-//       }
-//     }
-//   }
-// }, 1000);
+    // At the start of each day (hours === 0)
+    if (hours === 0 && lastProcessedDay !== dayOfYear) {
+      lastProcessedDay = dayOfYear;
+      console.log('🍞 Start of day, calling mintBread()');
+      try {
+        await mintBread();
+      } catch (error) {
+        console.error('Error in mintBread:', error);
+      }
+    }
+  }
+}, 1000);
