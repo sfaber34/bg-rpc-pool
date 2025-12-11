@@ -5,10 +5,11 @@ const nodeDefaultTimeout = 500;
 
 // Method-specific timeouts (in milliseconds)
 const nodeMethodSpecificTimeouts = {
-  'eth_getBlockReceipts': 1700,
+  'eth_getBlockReceipts': 2000,
   'eth_getBlockByNumber': 1500,
-  'eth_getBlockByHash': 1100,
+  'eth_getBlockByHash': 1500,
   'eth_getLogs': 2000,
+  'eth_getTransactionReceipt': 2000,
 };
 const pointUpdateInterval = 10000;
 // const requestSetChance = 5; // 1 in n requests will be a set request
@@ -63,6 +64,37 @@ const methodsToSkipComparison = [
   'txpool_inspect',           // Node's transaction pool
 ];
 
+// Map of RPC methods that can be cached with their block number parameter positions
+const cacheableMethods = new Map([  
+  // Methods with block number at position 0 (first parameter)
+  ['eth_getBlockByNumber', 0],
+  ['eth_getBlockTransactionCountByNumber', 0],
+  ['eth_getUncleCountByBlockNumber', 0],
+  ['eth_getUncleByBlockNumberAndIndex', 0],
+  ['eth_getTransactionByBlockNumberAndIndex', 0],
+  ['eth_getBlockReceipts', 0],
+  
+  // Methods with block number at position 1 (second parameter)
+  ['eth_getBalance', 1],
+  ['eth_getTransactionCount', 1],
+  ['eth_getCode', 1],
+  ['eth_call', 1],
+  ['eth_estimateGas', 1],
+  ['eth_feeHistory', 1],
+  
+  // Methods with block number at position 2 (third parameter)
+  ['eth_getStorageAt', 2],
+  
+  // Methods with no block number parameter (hash-based or transaction-based)
+  ['eth_getBlockByHash', null],
+  ['eth_getBlockTransactionCountByHash', null],
+  ['eth_getUncleCountByBlockHash', null],
+  ['eth_getUncleByBlockHashAndIndex', null],
+  ['eth_getTransactionByHash', null],
+  ['eth_getTransactionByBlockHashAndIndex', null],
+  ['eth_getTransactionReceipt', null],
+]);
+
 module.exports = {
   portPoolPublic,
   poolPort,
@@ -78,4 +110,5 @@ module.exports = {
   poolNodeLogPath,
   compareResultsLogPath,
   methodsToSkipComparison,
+  cacheableMethods,
 };

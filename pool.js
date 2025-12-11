@@ -26,38 +26,7 @@ const { getBlockNumberMode } = require('./utils/getBlockNumberMode');
 const { sendTelegramAlert } = require('./utils/telegramUtils');
 const { isMachineIdSuspicious, extractMacAddressFromMachineId, getSuspiciousMacAddresses, reloadSuspiciousMacAddresses } = require('./utils/suspiciousMacChecker');
 
-const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold, methodsToSkipComparison } = require('./config');
-
-// Map of RPC methods that can be cached with their block number parameter positions
-const cacheableMethods = new Map([  
-  // Methods with block number at position 0 (first parameter)
-  ['eth_getBlockByNumber', 0],
-  ['eth_getBlockTransactionCountByNumber', 0],
-  ['eth_getUncleCountByBlockNumber', 0],
-  ['eth_getUncleByBlockNumberAndIndex', 0],
-  ['eth_getTransactionByBlockNumberAndIndex', 0],
-  ['eth_getBlockReceipts', 0],
-  
-  // Methods with block number at position 1 (second parameter)
-  ['eth_getBalance', 1],
-  ['eth_getTransactionCount', 1],
-  ['eth_getCode', 1],
-  ['eth_call', 1],
-  ['eth_estimateGas', 1],
-  ['eth_feeHistory', 1],
-  
-  // Methods with block number at position 2 (third parameter)
-  ['eth_getStorageAt', 2],
-  
-  // Methods with no block number parameter (hash-based or transaction-based)
-  ['eth_getBlockByHash', null],
-  ['eth_getBlockTransactionCountByHash', null],
-  ['eth_getUncleCountByBlockHash', null],
-  ['eth_getUncleByBlockHashAndIndex', null],
-  ['eth_getTransactionByHash', null],
-  ['eth_getTransactionByBlockHashAndIndex', null],
-  ['eth_getTransactionReceipt', null],
-]);
+const { portPoolPublic, poolPort, wsHeartbeatInterval, requestSetChance, nodeTimingFetchInterval, poolNodeStaleThreshold, methodsToSkipComparison, cacheableMethods } = require('./config');
 
 const poolMap = new Map();
 
