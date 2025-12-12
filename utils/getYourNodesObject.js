@@ -65,7 +65,10 @@ function getMaxBlockNumber(poolMap) {
  * @param {string[]} ensNames - Array of ENS names associated with the address
  * @returns {Object} Object containing:
  *   - nodesOnline: number of nodes owned by this address
- *   - nodes: array of node objects with details
+ *   - nodes: array of node objects with details including:
+ *     - nodeId, executionClient, consensusClient, blockNumber, isFollowingHead
+ *     - nExecutionPeers, nConsensusPeers
+ *     - cpuUsage, memoryUsage, storageUsage
  */
 function getYourNodesObject(poolMap, ownerAddress, ensNames = []) {
   try {
@@ -115,7 +118,10 @@ function getYourNodesObject(poolMap, ownerAddress, ensNames = []) {
         blockNumber: blockNumber,
         isFollowingHead: isFollowingHead,
         nExecutionPeers: client.execution_peers || 0,
-        nConsensusPeers: client.consensus_peers || 0
+        nConsensusPeers: client.consensus_peers || 0,
+        cpuUsage: client.cpu_usage || '',
+        memoryUsage: client.memory_usage || '',
+        storageUsage: client.storage_usage || ''
       };
 
       result.nodes.push(nodeInfo);
