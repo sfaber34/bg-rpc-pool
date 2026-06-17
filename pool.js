@@ -439,7 +439,8 @@ const wsServerInternal = require('https').createServer(
       try {
         const rpcRequest = JSON.parse(body);
         console.log("-----------------------------------------------------------------------------------------");
-        console.log('📡 Received RPC request:', JSON.stringify(rpcRequest, null, 2));
+        const { jsonrpc, id, method } = rpcRequest;
+        console.log('📡 Received RPC request:', { jsonrpc, id, method });
 
         try {
           let result;

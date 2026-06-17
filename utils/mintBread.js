@@ -169,7 +169,8 @@ async function mintBread() {
     const baseWalletClient = createWalletClient({
       account,
       chain: base,
-      transport: http(`https://base-mainnet.g.alchemy.com/v2/${alchemyBaseApiKey}`),
+      // transport: http(`https://base-mainnet.g.alchemy.com/v2/${alchemyBaseApiKey}`),
+      transport: http(`https://mainnet.base.org`),
     });
 
     // Get the current nonce for the account to prevent nonce errors

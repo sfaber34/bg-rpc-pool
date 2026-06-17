@@ -12,7 +12,8 @@ if (!alchemyBaseApiKey) {
 
 const basePublicClient = createPublicClient({
   chain: base,
-  transport: http(`https://base-mainnet.g.alchemy.com/v2/${alchemyBaseApiKey}`),
+  // transport: http(`https://base-mainnet.g.alchemy.com/v2/${alchemyBaseApiKey}`),
+  transport: http(`https://mainnet.base.org`),
 });
 
 module.exports = { basePublicClient }; 
